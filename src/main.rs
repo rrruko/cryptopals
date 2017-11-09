@@ -286,6 +286,7 @@ fn base64_encode(data: &[u8]) -> String {
     encoded
 }
 
+// FIXME: Doesn't handle trailing = properly
 fn base64_decode(data: &Vec<u8>) -> Vec<u8> {
     let table: Vec<u8> = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".bytes().collect();
     println!("{:?}", table);
