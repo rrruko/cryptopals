@@ -254,7 +254,7 @@ fn base64_encode(data: &[u8]) -> String {
         let out = match triplet {
             &[a] => {
                 let bits = a as u32 * 256 * 256;
-                [ *table.get((bits >> 18) as usize).unwrap()
+                [ *table.get( (bits >> 18)       as usize).unwrap()
                 , *table.get(((bits >> 12) % 64) as usize).unwrap()
                 , 61
                 , 61
@@ -262,18 +262,18 @@ fn base64_encode(data: &[u8]) -> String {
             },
             &[a,b] => {
                 let bits = a as u32 * 256 * 256 + b as u32 * 256;
-                [ *table.get((bits >> 18) as usize).unwrap()
+                [ *table.get( (bits >> 18)       as usize).unwrap()
                 , *table.get(((bits >> 12) % 64) as usize).unwrap()
-                , *table.get(((bits >> 6) % 64) as usize).unwrap()
+                , *table.get(((bits >> 6 ) % 64) as usize).unwrap()
                 , 61
                 ]
             },
             &[a,b,c] => {
                 let bits = a as u32 * 256 * 256 + b as u32 * 256 + c as u32;
-                [ *table.get((bits >> 18) as usize).unwrap()
+                [ *table.get( (bits >> 18)       as usize).unwrap()
                 , *table.get(((bits >> 12) % 64) as usize).unwrap()
-                , *table.get(((bits >> 6) % 64) as usize).unwrap()
-                , *table.get((bits % 64) as usize).unwrap()
+                , *table.get(((bits >> 6 ) % 64) as usize).unwrap()
+                , *table.get( (bits        % 64) as usize).unwrap()
                 ]
             },
             _ => {
