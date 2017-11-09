@@ -253,27 +253,27 @@ fn base64_encode(data: &[u8]) -> String {
     for triplet in data.chunks(3) {
         let out = match triplet {
             &[a] => {
-                let bits = a as u32 * 256 * 256;
-                [ *table.get( (bits >> 18)       as usize).unwrap()
-                , *table.get(((bits >> 12) % 64) as usize).unwrap()
+                let bits = a as usize * 256 * 256;
+                [ *table.get( (bits >> 18)      ).unwrap()
+                , *table.get(((bits >> 12) % 64)).unwrap()
                 , 61
                 , 61
                 ]
             },
             &[a,b] => {
-                let bits = a as u32 * 256 * 256 + b as u32 * 256;
-                [ *table.get( (bits >> 18)       as usize).unwrap()
-                , *table.get(((bits >> 12) % 64) as usize).unwrap()
-                , *table.get(((bits >> 6 ) % 64) as usize).unwrap()
+                let bits = a as usize * 256 * 256 + b as usize * 256;
+                [ *table.get( (bits >> 18)      ).unwrap()
+                , *table.get(((bits >> 12) % 64)).unwrap()
+                , *table.get(((bits >> 6 ) % 64)).unwrap()
                 , 61
                 ]
             },
             &[a,b,c] => {
-                let bits = a as u32 * 256 * 256 + b as u32 * 256 + c as u32;
-                [ *table.get( (bits >> 18)       as usize).unwrap()
-                , *table.get(((bits >> 12) % 64) as usize).unwrap()
-                , *table.get(((bits >> 6 ) % 64) as usize).unwrap()
-                , *table.get( (bits        % 64) as usize).unwrap()
+                let bits = a as usize * 256 * 256 + b as usize * 256 + c as usize;
+                [ *table.get( (bits >> 18)      ).unwrap()
+                , *table.get(((bits >> 12) % 64)).unwrap()
+                , *table.get(((bits >> 6 ) % 64)).unwrap()
+                , *table.get( (bits        % 64)).unwrap()
                 ]
             },
             _ => {
