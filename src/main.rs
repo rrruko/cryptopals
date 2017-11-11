@@ -8,18 +8,21 @@ use std::io::prelude::*;
 use std::io::BufReader;
 use std::option::Option;
 use std::str;
+use std::vec::Vec;
 
-const bar: &str = "--------------------------------";
+const BAR: &str = "--------------------------------";
 
 fn main() {
-    let t = "hel";
-    let enc = base64_encode(&(t.bytes().collect::<Vec<u8>>())[..]);
-    println!("enc: {:?}", enc);
+    identity("Ringo mogire beam");
+    identity("Ringo mogire beam!");
+    identity("Ringo mogire beam!!");
+}
+
+fn identity(v: &str) {
+    let vbytes = v.bytes().collect::<Vec<u8>>();
+    let enc = base64_encode(&vbytes[..]);
     let dec = base64_decode(&enc.bytes().collect::<Vec<u8>>());
-    println!("dec: {:?}", dec);
-    println!("{}", bar);
-    //println!("Trying challenge 6");
-    //_6();
+    assert_eq!(vbytes, dec);
 }
 
 fn _1() {
@@ -81,7 +84,7 @@ fn _6() {
     file.read_to_end(&mut base64_bytes);
     base64_bytes = base64_bytes.into_iter().filter(|&x| x > 32).collect();
     println!("{:?}", &base64_bytes);
-    let mut bytes: Vec<u8> = base64_decode(&base64_bytes);
+    let bytes: Vec<u8> = base64_decode(&base64_bytes);
     println!("{:?}", bytes);
     let mut nedist = (1, std::f64::MAX);
     for keysize in 2..40 {
@@ -234,7 +237,7 @@ fn base16_decode(contents: String) -> Vec<u8> {
 }
 
 fn base16_encode(data: &[u8]) -> String {
-    let table = "0123456789abcdef".as_bytes();
+    let table = b"0123456789abcdef";
     let mut encoded = String::new();
     for byte in data {
         let up = byte / 16;
@@ -246,69 +249,72 @@ fn base16_encode(data: &[u8]) -> String {
 }
 
 // warning: this sucks
+// also, maybe this shouldn't return a String?
 fn base64_encode(data: &[u8]) -> String {
-    let table = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".as_bytes();
+    let table = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut encoded = String::new();
-    println!("bytes in {:?}", data);
     for triplet in data.chunks(3) {
-        let out = match triplet {
-            &[a] => {
+        let out = match *triplet {
+            [a] => {
                 let bits = a as usize * 256 * 256;
-                [ *table.get( (bits >> 18)      ).unwrap()
-                , *table.get(((bits >> 12) % 64)).unwrap()
+                [ table[ bits >> 18      ]
+                , table[(bits >> 12) % 64]
                 , 61
                 , 61
                 ]
             },
-            &[a,b] => {
+            [a,b] => {
                 let bits = a as usize * 256 * 256 + b as usize * 256;
-                [ *table.get( (bits >> 18)      ).unwrap()
-                , *table.get(((bits >> 12) % 64)).unwrap()
-                , *table.get(((bits >> 6 ) % 64)).unwrap()
+                [ table[ bits >> 18      ]
+                , table[(bits >> 12) % 64]
+                , table[(bits >> 6 ) % 64]
                 , 61
                 ]
             },
-            &[a,b,c] => {
+            [a,b,c] => {
                 let bits = a as usize * 256 * 256 + b as usize * 256 + c as usize;
-                [ *table.get( (bits >> 18)      ).unwrap()
-                , *table.get(((bits >> 12) % 64)).unwrap()
-                , *table.get(((bits >> 6 ) % 64)).unwrap()
-                , *table.get( (bits        % 64)).unwrap()
+                [ table[ bits >> 18      ]
+                , table[(bits >> 12) % 64]
+                , table[(bits >> 6 ) % 64]
+                , table[ bits        % 64]
                 ]
             },
             _ => {
                 unreachable!()
             },
         };
-        let chunk = str::from_utf8(&out[..]).expect("b64enc");
+        let chunk = str::from_utf8(&out[..]).unwrap();
         encoded.push_str(chunk);
     }
     encoded
 }
 
-// FIXME: Doesn't handle trailing = properly
-fn base64_decode(data: &Vec<u8>) -> Vec<u8> {
+fn base64_decode(data: &[u8]) -> Vec<u8> {
     let table: Vec<u8> = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".bytes().collect();
-    println!("{:?}", table);
-    println!("bytes in: {:?}", data);
     let mut decoded = Vec::<u8>::new();
     for quartet in data.chunks(4) {
-        // Each byte of input maps to an index in the table.
-        // ABC= -> 0,1,2,None
-        // 0,1,2,None -> 0,1,2,0
         let indices: Vec<u8> = quartet
             .iter()
-            .map(|x| table.iter().position(|y| y == x).map(|p| p as u8))
-            .map(|index| index.unwrap_or(0))
+            .map(|x| table.iter().position(|y| y == x))
+            .filter_map(|x| x)
+            .map(|x| x as u8)
             .collect();
         
-        // Convert the four 6-bit indices into three bytes.
-        let octets: [u8; 3] =
-            [(indices.get(0).unwrap() << 2) + (indices.get(1).unwrap() >> 4)
-            ,(indices.get(1).unwrap() << 4) + (indices.get(2).unwrap() >> 2)
-            ,(indices.get(2).unwrap() << 6) + (indices.get(3).unwrap())
+        // Convert the four 6-bit indices into three bytes,
+        // fewer if there were any `=`s
+        let v: [u8; 3] =
+            [(*indices.get(0).unwrap_or(&0) << 2) + (*indices.get(1).unwrap_or(&0) >> 4)
+            ,(*indices.get(1).unwrap_or(&0) << 4) + (*indices.get(2).unwrap_or(&0) >> 2)
+            ,(*indices.get(2).unwrap_or(&0) << 6) + (*indices.get(3).unwrap_or(&0))
             ];
-        decoded.append(&mut octets.to_vec());
+
+        // There's probably a better way to do this?
+        let mut octets = Vec::<u8>::new();
+        for x in v.iter().take(indices.len() - 1) {
+            octets.push(*x);
+        }
+
+        decoded.append(&mut octets);
     }
     decoded
 }
