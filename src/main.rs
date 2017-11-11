@@ -145,7 +145,7 @@ fn decrypt_single_byte_xor(bytes: &Vec<u8>) -> Result<String, std::str::Utf8Erro
         let ch = vec![key; bytes.len()];
         let x = fixed_xor(&bytes, &ch).expect("ack");
         let plaintext = from_ascii(&x)?;
-        let s = score(plaintext.to_owned());
+        let s = score(plaintext);
         if best_score.1 > s {
             best_score = (key, s);
         }
@@ -159,7 +159,7 @@ fn from_ascii(v: &Vec<u8>) -> Result<&str, std::str::Utf8Error> {
     str::from_utf8(&v[..])
 }
 
-fn score(s: String) -> f32 {
+fn score(s: &str) -> f32 {
     let english_freq = vec![
         8.167,
         1.492,
@@ -204,7 +204,7 @@ fn diff(v1: Vec<f32>, v2: Vec<f32>) -> Option<f32> {
     }
 }
 
-fn histo(s: String) -> Vec<f32> {
+fn histo(s: &str) -> Vec<f32> {
     let mut v = vec![0.0; 26];
     for ch in s.chars() {
         if let Some(ix) = alph(&ch) {
