@@ -21,6 +21,8 @@ fn test() {
     _1();
     _2();
     _3();
+    _4();
+    _5();
 }
 
 fn test_base64() {
@@ -41,7 +43,7 @@ fn _1() {
     let mut contents = String::new();
     file.read_to_string(&mut contents).expect("Couldn't read to string");
     let contents = contents.trim();
-    let bytes = base16_decode(contents.to_owned());
+    let bytes = base16_decode(contents);
     let base64enc = base64_encode(bytes.as_slice());
     assert_eq!(
         "SSdtIGtpbGxpbmcgeW91ciBicmFpbiBsaWtlIGEgcG9pc29ub3VzIG11c2hyb29t",
@@ -54,15 +56,15 @@ fn _2() {
     let res  = "746865206b696420646f6e277420706c6179";
 
     let ans = fixed_xor(
-        &base16_decode(xor1.to_owned()),
-        &base16_decode(xor2.to_owned())
+        &base16_decode(xor1),
+        &base16_decode(xor2)
     ).unwrap();
     assert_eq!(base16_encode(&ans[..]), res);
 }
 
 fn _3() {
     let code = "1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736";
-    let bytes = base16_decode(code.to_owned());
+    let bytes = base16_decode(code);
     let ans = decrypt_single_byte_xor(&bytes);
     assert_eq!("Cooking MC's like a pound of bacon", ans.unwrap());
 }
@@ -72,26 +74,28 @@ fn _4() {
     let buf_reader = BufReader::new(file);
     let l = buf_reader.lines();
     for line in l {
-        let bytes = base16_decode(line.expect("no line"));
-        match decrypt_single_byte_xor(&bytes) {
-            Ok(res) => println!("{}", res),
-            _       => ()
+        let bytes = base16_decode(&line.expect("no line")[..]);
+        if let Ok(res) = decrypt_single_byte_xor(&bytes) {
+            println!("{}", res);
         }
     }
 }
 
 fn _5() {
-    let inp: Vec<u8> = "h-hewwo??".bytes().collect();
-    let key: Vec<u8> = "uwu".bytes().collect();
-    let out = repeating_xor(&inp, &key);
-    //let out2 = repeating_xor(&out, &key);
-    println!("{}", from_ascii(&out).unwrap());
-    println!("{}", base16_encode(&out[..]));
+    let raw = b"Burning 'em, if you ain't quick and nimble\nI go crazy when I hear a cymbal";
+    let key = b"ICE";
+
+    let enc = repeating_xor(&raw[..], &key[..]);
+    let expected = "0b3637272a2b2e63622c2e69692a23693a2a3c6324202d623d63343c2a26226324272765272a282b2f20430a652e2c652a3124333a653e2b2027630c692b20283165286326302e27282f";
+    assert_eq!(enc[..], base16_decode(expected)[..]);
+
+    let dec = repeating_xor(&enc, &key[..]);
+    assert_eq!(raw[..], dec[..]);
 }
 
 fn _6() {
-    let test = hamming(&"this is a test".bytes().collect(),
-                       &"wokka wokka!!!".bytes().collect());
+    let test = hamming(&"this is a test".bytes().collect::<Vec<u8>>()[..],
+                       &"wokka wokka!!!".bytes().collect::<Vec<u8>>()[..]);
     assert_eq!(test.unwrap(), 37);
     let mut file = File::open("6.txt").expect("no 6.txt");
     let mut base64_bytes: Vec<u8> = Vec::new();
@@ -104,7 +108,7 @@ fn _6() {
     for keysize in 2..40 {
         let f = &bytes[0..keysize];
         let s = &bytes[keysize..keysize * 2];
-        let dist = hamming(&f.to_vec(), &s.to_vec()).expect("no hamming") as f64 / keysize as f64;
+        let dist = hamming(f, s).expect("no hamming") as f64 / keysize as f64;
         if dist < nedist.1 {
             nedist = (keysize, dist);
         }
@@ -113,7 +117,7 @@ fn _6() {
     //println!("{:?}", nedist);
 }
 
-fn hamming(a: &Vec<u8>, b: &Vec<u8>) -> Option<u64> {
+fn hamming(a: &[u8], b: &[u8]) -> Option<u64> {
     let mut sum = 0;
     if a.len() != b.len() {
         None
@@ -126,7 +130,7 @@ fn hamming(a: &Vec<u8>, b: &Vec<u8>) -> Option<u64> {
     }
 }
 
-fn repeating_xor(bytes: &Vec<u8>, key: &Vec<u8>) -> Vec<u8> {
+fn repeating_xor(bytes: &[u8], key: &[u8]) -> Vec<u8> {
     let mut out = Vec::new();
     for i in 0..bytes.len() {
         let key_i = key[i % key.len()];
@@ -135,7 +139,7 @@ fn repeating_xor(bytes: &Vec<u8>, key: &Vec<u8>) -> Vec<u8> {
     out
 }
 
-fn decrypt_single_byte_xor<'a>(bytes: &'a Vec<u8>) -> Result<String, std::str::Utf8Error> {
+fn decrypt_single_byte_xor(bytes: &Vec<u8>) -> Result<String, std::str::Utf8Error> {
     let mut best_score = (0, std::f32::INFINITY);
     for key in 1..127 {
         let ch = vec![key; bytes.len()];
@@ -148,13 +152,10 @@ fn decrypt_single_byte_xor<'a>(bytes: &'a Vec<u8>) -> Result<String, std::str::U
     }
 
     let w = fixed_xor(&bytes, &vec![best_score.0; bytes.len()]).unwrap();
-    match from_ascii(&w) {
-        Ok(res) => Ok(res.to_owned()),
-        Err(e) => Err(e)
-    }
+    from_ascii(&w).map(|x| x.to_owned())
 }
 
-fn from_ascii<'a>(v: &'a Vec<u8>) -> Result<&'a str, std::str::Utf8Error> {
+fn from_ascii(v: &Vec<u8>) -> Result<&str, std::str::Utf8Error> {
     str::from_utf8(&v[..])
 }
 
@@ -239,7 +240,7 @@ fn fixed_xor(a: &Vec<u8>, b: &Vec<u8>) -> Option<Vec<u8>> {
     }
 }
 
-fn base16_decode(contents: String) -> Vec<u8> {
+fn base16_decode(contents: &str) -> Vec<u8> {
     let mut bytes = Vec::<u8>::new();
     for byte in contents.as_bytes().chunks(2) {
         let s = str::from_utf8(byte).unwrap();
