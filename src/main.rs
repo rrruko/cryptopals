@@ -13,6 +13,17 @@ use std::vec::Vec;
 const BAR: &str = "--------------------------------";
 
 fn main() {
+    test();
+}
+
+fn test() {
+    test_base64();
+    _1();
+    _2();
+    _3();
+}
+
+fn test_base64() {
     identity("Ringo mogire beam");
     identity("Ringo mogire beam!");
     identity("Ringo mogire beam!!");
@@ -31,7 +42,10 @@ fn _1() {
     file.read_to_string(&mut contents).expect("Couldn't read to string");
     let contents = contents.trim();
     let bytes = base16_decode(contents.to_owned());
-    println!("{}", base64_encode(bytes.as_slice()));
+    let base64enc = base64_encode(bytes.as_slice());
+    assert_eq!(
+        "SSdtIGtpbGxpbmcgeW91ciBicmFpbiBsaWtlIGEgcG9pc29ub3VzIG11c2hyb29t",
+        base64enc);
 }
 
 fn _2() {
@@ -43,14 +57,14 @@ fn _2() {
         &base16_decode(xor1.to_owned()),
         &base16_decode(xor2.to_owned())
     ).unwrap();
-    println!("{}", base16_encode(&ans[..]));
+    assert_eq!(base16_encode(&ans[..]), res);
 }
 
 fn _3() {
     let code = "1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736";
     let bytes = base16_decode(code.to_owned());
     let ans = decrypt_single_byte_xor(&bytes);
-    println!("{}", ans.unwrap_or("whoops".to_owned()));
+    assert_eq!("Cooking MC's like a pound of bacon", ans.unwrap());
 }
 
 fn _4() {
@@ -218,7 +232,7 @@ fn fixed_xor(a: &Vec<u8>, b: &Vec<u8>) -> Option<Vec<u8>> {
     }
     else {
         let mut out = Vec::new();
-        for i in 0..a.len() - 1 {
+        for i in 0..a.len() {
             out.push(a[i] ^ b[i]);
         }
         Some(out)
