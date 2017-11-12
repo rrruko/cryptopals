@@ -1,6 +1,7 @@
 #![feature(slice_patterns)]
 
 extern crate cryptopals;
+extern crate itertools;
 
 use std::char;
 use std::fs::File;
@@ -9,6 +10,7 @@ use std::io::BufReader;
 use std::option::Option;
 use std::str;
 use std::vec::Vec;
+use itertools::Itertools;
 
 const BAR: &str = "--------------------------------";
 
@@ -17,12 +19,14 @@ fn main() {
 }
 
 fn test() {
+    test_transpose();
     test_base64();
     _1();
     _2();
     _3();
     _4();
     _5();
+    _6();
 }
 
 fn test_base64() {
@@ -112,9 +116,36 @@ fn _6() {
         if dist < nedist.1 {
             nedist = (keysize, dist);
         }
-        println!("f: {:?} \ns: {:?}", f, s);
     }
-    //println!("{:?}", nedist);
+    println!("keysize is {}. smallest normalized edit distance is {}.",
+             nedist.0, nedist.1);
+
+    assert!(bytes.len() % nedist.0 == 0);
+    let bytesT = transpose(&bytes[..], nedist.0);
+}
+
+fn transpose(s: &[u8], width: usize) -> Vec<u8> {
+    let mut buffer = Vec::new();
+    for i in 0..width {
+        let mut chunk: Vec<u8> = s
+            .iter()
+            .skip(i)
+            .step(width)
+            .map(|x| x.clone())
+            .collect();
+        buffer.append(&mut chunk);
+    }
+    buffer
+}
+
+fn test_transpose() {
+    let v = vec![0, 1, 2, 3, 4, 5, 6, 7];
+    println!("v: {:?}", v);
+    let vT = transpose(&v[..], 2);
+    println!("vT: {:?}", vT);
+    let vTT = transpose(&vT[..], 4);
+    println!("vTT: {:?}", vTT);
+    assert_eq!(v, vTT);
 }
 
 fn hamming(a: &[u8], b: &[u8]) -> Option<u64> {
@@ -143,8 +174,8 @@ fn decrypt_single_byte_xor(bytes: &Vec<u8>) -> Result<String, std::str::Utf8Erro
     let mut best_score = (0, std::f32::INFINITY);
     for key in 1..127 {
         let ch = vec![key; bytes.len()];
-        let x = fixed_xor(&bytes, &ch).expect("ack");
-        let plaintext = from_ascii(&x)?;
+        let x = fixed_xor(bytes, &ch).expect("ack");
+        let plaintext = str::from_utf8(&x)?;
         let s = score(plaintext);
         if best_score.1 > s {
             best_score = (key, s);
@@ -152,11 +183,7 @@ fn decrypt_single_byte_xor(bytes: &Vec<u8>) -> Result<String, std::str::Utf8Erro
     }
 
     let w = fixed_xor(&bytes, &vec![best_score.0; bytes.len()]).unwrap();
-    from_ascii(&w).map(|x| x.to_owned())
-}
-
-fn from_ascii(v: &Vec<u8>) -> Result<&str, std::str::Utf8Error> {
-    str::from_utf8(&v[..])
+    str::from_utf8(&w).map(|x| x.to_owned())
 }
 
 fn score(s: &str) -> f32 {
