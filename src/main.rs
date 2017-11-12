@@ -19,7 +19,7 @@ fn main() {
 }
 
 fn test() {
-    test_transpose();
+    //test_transpose();
     test_base64();
     _1();
     _2();
@@ -69,8 +69,8 @@ fn _2() {
 fn _3() {
     let code = "1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736";
     let bytes = base16_decode(code);
-    let ans = decrypt_single_byte_xor(&bytes);
-    assert_eq!("Cooking MC's like a pound of bacon", ans.unwrap());
+    let ans = decrypt_single_byte_xor(&bytes).unwrap().0;
+    assert_eq!("Cooking MC's like a pound of bacon", ans);
 }
 
 fn _4() {
@@ -80,7 +80,7 @@ fn _4() {
     for line in l {
         let bytes = base16_decode(&line.expect("no line")[..]);
         if let Ok(res) = decrypt_single_byte_xor(&bytes) {
-            println!("{}", res);
+            println!("{}", res.0);
         }
     }
 }
@@ -108,20 +108,31 @@ fn _6() {
     println!("{:?}", &base64_bytes);
     let bytes: Vec<u8> = base64_decode(&base64_bytes);
     println!("{:?}", bytes);
+    let mut key_scores = Vec::<(usize, f64)>::new();
     let mut nedist = (1, std::f64::MAX);
     for keysize in 2..40 {
         let f = &bytes[0..keysize];
         let s = &bytes[keysize..keysize * 2];
         let dist = hamming(f, s).expect("no hamming") as f64 / keysize as f64;
-        if dist < nedist.1 {
-            nedist = (keysize, dist);
-        }
+        key_scores.push((keysize, dist));
     }
+    println!("{:?}", key_scores);
+    return;
     println!("keysize is {}. smallest normalized edit distance is {}.",
              nedist.0, nedist.1);
 
-    assert!(bytes.len() % nedist.0 == 0);
+    for block in bytes.chunks(nedist.0) {
+        println!("> {:?}", block);
+    }
     let bytesT = transpose(&bytes[..], nedist.0);
+    let mut the_key = Vec::<u8>::new();
+    for block in bytesT.chunks(bytesT.len()/nedist.0) {
+       let key = decrypt_single_byte_xor(block).unwrap().1;
+       the_key.push(key);
+    }
+    println!("{}", str::from_utf8(&the_key[..]).unwrap());
+    let dec = repeating_xor(&bytes[..], &the_key[..]);
+    //println!("{}", str::from_utf8(&dec[..]).unwrap());
 }
 
 fn transpose(s: &[u8], width: usize) -> Vec<u8> {
@@ -139,13 +150,24 @@ fn transpose(s: &[u8], width: usize) -> Vec<u8> {
 }
 
 fn test_transpose() {
-    let v = vec![0, 1, 2, 3, 4, 5, 6, 7];
-    println!("v: {:?}", v);
-    let vT = transpose(&v[..], 2);
-    println!("vT: {:?}", vT);
-    let vTT = transpose(&vT[..], 4);
-    println!("vTT: {:?}", vTT);
-    assert_eq!(v, vTT);
+    test_transpose_2(&[0], 2);
+    test_transpose_2(&[0, 1], 2);
+    test_transpose_2(&[0, 1, 2], 2);
+    test_transpose_2(&[0, 1, 2, 3], 2);
+    test_transpose_2(&[0], 3);
+    test_transpose_2(&[0, 1], 3);
+    test_transpose_2(&[0, 1, 2], 3);
+    test_transpose_2(&[0, 1, 2, 3], 3);
+}
+
+// This checks that a transpose is invertible, which I don't think is actually
+// true for non-rectangular "matrices" like the ones I'm working with
+// So not really a good test
+fn test_transpose_2(v: &[u8], width: usize) {
+    let height = (v.len() - 1) / width + 1;
+    let vT = transpose(&v[..], width);
+    let vTT = transpose(&vT[..], height);
+    assert_eq!(v, &vTT[..]);
 }
 
 fn hamming(a: &[u8], b: &[u8]) -> Option<u64> {
@@ -170,7 +192,7 @@ fn repeating_xor(bytes: &[u8], key: &[u8]) -> Vec<u8> {
     out
 }
 
-fn decrypt_single_byte_xor(bytes: &Vec<u8>) -> Result<String, std::str::Utf8Error> {
+fn decrypt_single_byte_xor(bytes: &[u8]) -> Result<(String, u8), std::str::Utf8Error> {
     let mut best_score = (0, std::f32::INFINITY);
     for key in 1..127 {
         let ch = vec![key; bytes.len()];
@@ -183,7 +205,7 @@ fn decrypt_single_byte_xor(bytes: &Vec<u8>) -> Result<String, std::str::Utf8Erro
     }
 
     let w = fixed_xor(&bytes, &vec![best_score.0; bytes.len()]).unwrap();
-    str::from_utf8(&w).map(|x| x.to_owned())
+    str::from_utf8(&w).map(|x| (x.to_owned(), best_score.0))
 }
 
 fn score(s: &str) -> f32 {
@@ -254,7 +276,7 @@ fn alph(c: &char) -> Option<u8> {
     }
 }
 
-fn fixed_xor(a: &Vec<u8>, b: &Vec<u8>) -> Option<Vec<u8>> {
+fn fixed_xor(a: &[u8], b: &[u8]) -> Option<Vec<u8>> {
     if a.len() != b.len() {
         None
     }
