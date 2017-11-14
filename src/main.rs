@@ -35,9 +35,9 @@ fn test_base64() {
 }
 
 fn identity(v: &str) {
-    let vbytes = v.bytes().collect::<Vec<u8>>();
-    let enc = base64_encode(&vbytes[..]);
-    let dec = base64_decode(&enc.bytes().collect::<Vec<u8>>());
+    let vbytes: Vec<u8> = v.bytes().collect();
+    let enc: Vec<u8> = base64_encode(&vbytes[..]);
+    let dec: Vec<u8> = base64_decode(&enc[..]);
     assert_eq!(vbytes, dec);
 }
 
@@ -50,7 +50,7 @@ fn _1() {
     let base64enc = base64_encode(bytes.as_slice());
     assert_eq!(
         "SSdtIGtpbGxpbmcgeW91ciBicmFpbiBsaWtlIGEgcG9pc29ub3VzIG11c2hyb29t",
-        base64enc);
+        str::from_utf8(&base64enc[..]).unwrap());
 }
 
 fn _2() {
@@ -290,10 +290,9 @@ fn base16_encode(data: &[u8]) -> String {
 }
 
 // warning: this sucks
-// also, maybe this shouldn't return a String?
-fn base64_encode(data: &[u8]) -> String {
+fn base64_encode(data: &[u8]) -> Vec<u8> {
     let table = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut encoded = String::new();
+    let mut encoded = Vec::new();
     for triplet in data.chunks(3) {
         let out = match *triplet {
             [a] => {
@@ -324,8 +323,7 @@ fn base64_encode(data: &[u8]) -> String {
                 unreachable!()
             },
         };
-        let chunk = str::from_utf8(&out[..]).unwrap();
-        encoded.push_str(chunk);
+        encoded.extend(out.iter().cloned());
     }
     encoded
 }
