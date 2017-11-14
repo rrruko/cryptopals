@@ -3,7 +3,7 @@
 extern crate cryptopals;
 extern crate itertools;
 
-use std::char;
+use std::cmp::Ordering;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
@@ -108,21 +108,22 @@ fn _6() {
     let bytes: Vec<u8> = base64_decode(&base64_bytes);
     println!("{:?}", bytes);
     let mut key_scores = Vec::<(usize, f64)>::new();
-    let mut nedist = (1, std::f64::MAX);
     for keysize in 2..40 {
         let f = &bytes[0..keysize];
         let s = &bytes[keysize..keysize * 2];
         let dist = hamming(f, s).expect("no hamming") as f64 / keysize as f64;
         key_scores.push((keysize, dist));
     }
+    key_scores.sort_by(|&a, &b| float_cmp(a.1, b.1));
+    let nedist = key_scores[0];
     println!("{:?}", key_scores);
-    return;
     println!("keysize is {}. smallest normalized edit distance is {}.",
              nedist.0, nedist.1);
 
     for block in bytes.chunks(nedist.0) {
         println!("> {:?}", block);
     }
+    println!("{}", bytes.len());
     let bytesT = transpose(&bytes[..], nedist.0);
     let mut the_key = Vec::<u8>::new();
     for block in bytesT.chunks(bytesT.len()/nedist.0) {
@@ -131,7 +132,11 @@ fn _6() {
     }
     println!("{}", str::from_utf8(&the_key[..]).unwrap());
     let dec = repeating_xor(&bytes[..], &the_key[..]);
-    //println!("{}", str::from_utf8(&dec[..]).unwrap());
+}
+
+fn float_cmp(a: f64, b: f64) -> Ordering {
+    assert!(a.is_finite() && b.is_finite());
+    a.partial_cmp(&b).unwrap_or(Ordering::Less)
 }
 
 fn transpose(s: &[u8], width: usize) -> Vec<u8> {
