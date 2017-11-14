@@ -19,7 +19,6 @@ fn main() {
 }
 
 fn test() {
-    //test_transpose();
     test_base64();
     _1();
     _2();
@@ -147,27 +146,6 @@ fn transpose(s: &[u8], width: usize) -> Vec<u8> {
         buffer.append(&mut chunk);
     }
     buffer
-}
-
-fn test_transpose() {
-    test_transpose_2(&[0], 2);
-    test_transpose_2(&[0, 1], 2);
-    test_transpose_2(&[0, 1, 2], 2);
-    test_transpose_2(&[0, 1, 2, 3], 2);
-    test_transpose_2(&[0], 3);
-    test_transpose_2(&[0, 1], 3);
-    test_transpose_2(&[0, 1, 2], 3);
-    test_transpose_2(&[0, 1, 2, 3], 3);
-}
-
-// This checks that a transpose is invertible, which I don't think is actually
-// true for non-rectangular "matrices" like the ones I'm working with
-// So not really a good test
-fn test_transpose_2(v: &[u8], width: usize) {
-    let height = (v.len() - 1) / width + 1;
-    let vT = transpose(&v[..], width);
-    let vTT = transpose(&vT[..], height);
-    assert_eq!(v, &vTT[..]);
 }
 
 fn hamming(a: &[u8], b: &[u8]) -> Option<u64> {
