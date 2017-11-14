@@ -135,8 +135,7 @@ fn _6() {
 }
 
 fn float_cmp(a: f64, b: f64) -> Ordering {
-    assert!(a.is_finite() && b.is_finite());
-    a.partial_cmp(&b).unwrap_or(Ordering::Less)
+    a.partial_cmp(&b).expect("Some arguments to float_cmp weren't finite")
 }
 
 fn transpose(s: &[u8], width: usize) -> Vec<u8> {
