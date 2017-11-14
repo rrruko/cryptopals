@@ -255,21 +255,20 @@ fn diff(v1: Vec<f32>, v2: Vec<f32>) -> Option<f32> {
 
 fn histo(s: &str) -> Vec<f32> {
     let mut v = vec![0.0; 26];
-    for ch in s.chars() {
-        if let Some(ix) = alph(&ch) {
+    for ch in s.bytes() {
+        if let Some(ix) = alph(ch) {
             v[ix as usize] += 1.0 / s.len() as f32;
         }
     }
     v
 }
 
-fn alph(c: &char) -> Option<u8> {
-    let ch = *c as u8;
-    if ch >= 65 && ch <= 90 {
-        Some(ch - 65)
+fn alph(c: u8) -> Option<u8> {
+    if c >= 65 && c <= 90 {
+        Some(c - 65)
     }
-    else if ch >= 97 && ch <= 122 {
-        Some(ch - 97)
+    else if c >= 97 && c <= 122 {
+        Some(c - 97)
     }
     else {
         None
