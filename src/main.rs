@@ -42,7 +42,7 @@ fn identity(v: &str) {
 }
 
 fn _1() {
-    let mut file = File::open("./1.txt").expect("Couldn't open file");
+    let mut file = File::open("data/1.txt").expect("no 1.txt");
     let mut contents = String::new();
     file.read_to_string(&mut contents).expect("Couldn't read to string");
     let contents = contents.trim();
@@ -73,7 +73,7 @@ fn _3() {
 }
 
 fn _4() {
-    let file = File::open("4.txt").unwrap();
+    let file = File::open("data/4.txt").expect("no 4.txt");
     let buf_reader = BufReader::new(file);
     let l = buf_reader.lines();
     for line in l {
@@ -100,7 +100,7 @@ fn _6() {
     let test = hamming(&"this is a test".bytes().collect::<Vec<u8>>()[..],
                        &"wokka wokka!!!".bytes().collect::<Vec<u8>>()[..]);
     assert_eq!(test.unwrap(), 37);
-    let mut file = File::open("6.txt").expect("no 6.txt");
+    let mut file = File::open("data/6.txt").expect("no 6.txt");
     let mut base64_bytes: Vec<u8> = Vec::new();
     file.read_to_end(&mut base64_bytes);
     base64_bytes = base64_bytes.into_iter().filter(|&x| x > 32).collect();
