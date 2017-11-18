@@ -27,16 +27,15 @@ fn test() {
 }
 
 fn test_base64() {
-    identity("Ringo mogire beam");
-    identity("Ringo mogire beam!");
-    identity("Ringo mogire beam!!");
+    identity(b"Ringo mogire beam");
+    identity(b"Ringo mogire beam!");
+    identity(b"Ringo mogire beam!!");
 }
 
-fn identity(v: &str) {
-    let vbytes: Vec<u8> = v.bytes().collect();
-    let enc: Vec<u8> = base64_encode(&vbytes);
-    let dec: Vec<u8> = base64_decode(&enc);
-    assert_eq!(vbytes, dec);
+fn identity(v: &[u8]) {
+    let enc = &base64_encode(v)[..];
+    let dec = &base64_decode(enc)[..];
+    assert_eq!(&v, &dec);
 }
 
 fn _1() {
@@ -327,7 +326,7 @@ fn base64_encode(data: &[u8]) -> Vec<u8> {
 }
 
 fn base64_decode(data: &[u8]) -> Vec<u8> {
-    let table: Vec<u8> = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".bytes().collect();
+    let table = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut decoded = Vec::<u8>::new();
     for quartet in data.chunks(4) {
         let indices: Vec<u8> = quartet
