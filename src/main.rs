@@ -12,8 +12,6 @@ use std::str;
 use std::vec::Vec;
 use itertools::Itertools;
 
-const BAR: &str = "--------------------------------";
-
 fn main() {
     test();
 }
@@ -97,12 +95,12 @@ fn _5() {
 }
 
 fn _6() {
-    let test = hamming(&"this is a test".bytes().collect::<Vec<u8>>()[..],
-                       &"wokka wokka!!!".bytes().collect::<Vec<u8>>()[..]);
+    let test = hamming(&b"this is a test"[..],
+                       &b"wokka wokka!!!"[..]);
     assert_eq!(test.unwrap(), 37);
     let mut file = File::open("data/6.txt").expect("no 6.txt");
     let mut base64_bytes: Vec<u8> = Vec::new();
-    file.read_to_end(&mut base64_bytes);
+    file.read_to_end(&mut base64_bytes).unwrap();
     base64_bytes = base64_bytes.into_iter().filter(|&x| x > 32).collect();
     println!("{:?}", &base64_bytes);
     let bytes: Vec<u8> = base64_decode(&base64_bytes);
@@ -124,9 +122,9 @@ fn _6() {
         println!("> {:?}", block);
     }
     println!("{}", bytes.len());
-    let bytesT = transpose(&bytes[..], nedist.0);
+    let bytes_t = transpose(&bytes[..], nedist.0);
     let mut the_key = Vec::<u8>::new();
-    for block in bytesT.chunks(bytesT.len()/nedist.0) {
+    for block in bytes_t.chunks(bytes_t.len()/nedist.0) {
        let key = decrypt_single_byte_xor(block).unwrap().1;
        the_key.push(key);
     }
@@ -145,7 +143,7 @@ fn transpose(s: &[u8], width: usize) -> Vec<u8> {
             .iter()
             .skip(i)
             .step(width)
-            .map(|x| x.clone())
+            .cloned()
             .collect();
         buffer.append(&mut chunk);
     }
@@ -159,7 +157,7 @@ fn hamming(a: &[u8], b: &[u8]) -> Option<u64> {
     }
     else {
         for i in 0..a.len() {
-            sum += (a[i] ^ b[i]).count_ones() as u64;
+            sum += u64::from((a[i] ^ b[i]).count_ones());
         }
         Some(sum)
     }
@@ -186,12 +184,12 @@ fn decrypt_single_byte_xor(bytes: &[u8]) -> Result<(String, u8), std::str::Utf8E
         }
     }
 
-    let w = fixed_xor(&bytes, &vec![best_score.0; bytes.len()]).unwrap();
+    let w = fixed_xor(bytes, &vec![best_score.0; bytes.len()]).unwrap();
     str::from_utf8(&w).map(|x| (x.to_owned(), best_score.0))
 }
 
 fn score(s: &str) -> f32 {
-    let english_freq = vec![
+    let english_freq = [
         8.167,
         1.492,
         2.782,
@@ -219,10 +217,10 @@ fn score(s: &str) -> f32 {
         1.974,
         0.074
     ];
-    diff(histo(s), english_freq).unwrap()
+    diff(&histo(s)[..], &english_freq).unwrap()
 }
 
-fn diff(v1: Vec<f32>, v2: Vec<f32>) -> Option<f32> {
+fn diff(v1: &[f32], v2: &[f32]) -> Option<f32> {
     if v1.len() != v2.len() {
         None
     }
