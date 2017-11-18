@@ -34,8 +34,8 @@ fn test_base64() {
 
 fn identity(v: &str) {
     let vbytes: Vec<u8> = v.bytes().collect();
-    let enc: Vec<u8> = base64_encode(&vbytes[..]);
-    let dec: Vec<u8> = base64_decode(&enc[..]);
+    let enc: Vec<u8> = base64_encode(&vbytes);
+    let dec: Vec<u8> = base64_decode(&enc);
     assert_eq!(vbytes, dec);
 }
 
@@ -48,7 +48,7 @@ fn _1() {
     let base64enc = base64_encode(bytes.as_slice());
     assert_eq!(
         "SSdtIGtpbGxpbmcgeW91ciBicmFpbiBsaWtlIGEgcG9pc29ub3VzIG11c2hyb29t",
-        str::from_utf8(&base64enc[..]).unwrap());
+        str::from_utf8(&base64enc).unwrap());
 }
 
 fn _2() {
@@ -60,7 +60,7 @@ fn _2() {
         &base16_decode(xor1),
         &base16_decode(xor2)
     ).unwrap();
-    assert_eq!(base16_encode(&ans[..]), res);
+    assert_eq!(base16_encode(&ans), res);
 }
 
 fn _3() {
@@ -75,7 +75,7 @@ fn _4() {
     let buf_reader = BufReader::new(file);
     let l = buf_reader.lines();
     for line in l {
-        let bytes = base16_decode(&line.expect("no line")[..]);
+        let bytes = base16_decode(&line.expect("no line"));
         if let Ok(res) = decrypt_single_byte_xor(&bytes) {
             println!("{}", res.0);
         }
@@ -86,24 +86,24 @@ fn _5() {
     let raw = b"Burning 'em, if you ain't quick and nimble\nI go crazy when I hear a cymbal";
     let key = b"ICE";
 
-    let enc = repeating_xor(&raw[..], &key[..]);
+    let enc = repeating_xor(raw, key);
     let expected = "0b3637272a2b2e63622c2e69692a23693a2a3c6324202d623d63343c2a26226324272765272a282b2f20430a652e2c652a3124333a653e2b2027630c692b20283165286326302e27282f";
-    assert_eq!(enc[..], base16_decode(expected)[..]);
+    assert_eq!(enc, base16_decode(expected));
 
-    let dec = repeating_xor(&enc, &key[..]);
+    let dec = repeating_xor(&enc, key);
     assert_eq!(raw[..], dec[..]);
 }
 
 fn _6() {
-    let test = hamming(&b"this is a test"[..],
-                       &b"wokka wokka!!!"[..]);
+    let test = hamming(b"this is a test",
+                       b"wokka wokka!!!");
     assert_eq!(test.unwrap(), 37);
     let mut file = File::open("data/6.txt").expect("no 6.txt");
-    let mut base64_bytes: Vec<u8> = Vec::new();
+    let mut base64_bytes = Vec::new();
     file.read_to_end(&mut base64_bytes).unwrap();
     base64_bytes = base64_bytes.into_iter().filter(|&x| x > 32).collect();
     println!("{:?}", &base64_bytes);
-    let bytes: Vec<u8> = base64_decode(&base64_bytes);
+    let bytes = base64_decode(&base64_bytes);
     println!("{:?}", bytes);
     let mut key_scores = Vec::<(usize, f64)>::new();
     for keysize in 2..40 {
@@ -122,30 +122,26 @@ fn _6() {
         println!("> {:?}", block);
     }
     println!("{}", bytes.len());
-    let bytes_t = transpose(&bytes[..], nedist.0);
-    let mut the_key = Vec::<u8>::new();
-    for block in bytes_t.chunks(bytes_t.len()/nedist.0) {
-       let key = decrypt_single_byte_xor(block).unwrap().1;
-       the_key.push(key);
+    let bytes_t = transpose(&bytes, nedist.0);
+    for block in bytes_t {
+        println!("{:?}", block);
     }
-    println!("{}", str::from_utf8(&the_key[..]).unwrap());
-    let dec = repeating_xor(&bytes[..], &the_key[..]);
 }
 
 fn float_cmp(a: f64, b: f64) -> Ordering {
     a.partial_cmp(&b).expect("Some arguments to float_cmp weren't finite")
 }
 
-fn transpose(s: &[u8], width: usize) -> Vec<u8> {
+fn transpose(s: &[u8], width: usize) -> Vec<Vec<u8>> {
     let mut buffer = Vec::new();
     for i in 0..width {
-        let mut chunk: Vec<u8> = s
+        let chunk: Vec<u8> = s
             .iter()
             .skip(i)
             .step(width)
             .cloned()
             .collect();
-        buffer.append(&mut chunk);
+        buffer.push(chunk);
     }
     buffer
 }
@@ -217,7 +213,7 @@ fn score(s: &str) -> f32 {
         1.974,
         0.074
     ];
-    diff(&histo(s)[..], &english_freq).unwrap()
+    diff(&histo(s), &english_freq).unwrap()
 }
 
 fn diff(v1: &[f32], v2: &[f32]) -> Option<f32> {
@@ -286,7 +282,7 @@ fn base16_encode(data: &[u8]) -> String {
         let up = byte / 16;
         let down = byte % 16;
         let out = [table[up as usize], table[down as usize]];
-        encoded.push_str(str::from_utf8(&out[..]).unwrap());
+        encoded.push_str(str::from_utf8(&out).unwrap());
     }
     encoded
 }
@@ -343,7 +339,7 @@ fn base64_decode(data: &[u8]) -> Vec<u8> {
         
         // Convert the four 6-bit indices into three bytes,
         // fewer if there were any `=`s
-        let v: [u8; 3] =
+        let v =
             [(*indices.get(0).unwrap_or(&0) << 2) + (*indices.get(1).unwrap_or(&0) >> 4)
             ,(*indices.get(1).unwrap_or(&0) << 4) + (*indices.get(2).unwrap_or(&0) >> 2)
             ,(*indices.get(2).unwrap_or(&0) << 6) + (*indices.get(3).unwrap_or(&0))
