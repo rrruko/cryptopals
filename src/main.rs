@@ -11,6 +11,7 @@ use std::option::Option;
 use std::str;
 use std::vec::Vec;
 use itertools::Itertools;
+use itertools::zip;
 
 fn main() {
     test();
@@ -150,9 +151,8 @@ fn hamming(a: &[u8], b: &[u8]) -> Option<u64> {
         None
     }
     else {
-        let pairs = a.iter().zip(b.iter());
-        Some(pairs
-            .map(|(a, b)| u64::from((a^b).count_ones()))
+        Some(zip(a, b)
+            .map(|(a, b)| u64::from((a ^ b).count_ones()))
             .sum())
     }
 }
