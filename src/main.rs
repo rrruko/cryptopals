@@ -146,15 +146,14 @@ fn transpose(s: &[u8], width: usize) -> Vec<Vec<u8>> {
 }
 
 fn hamming(a: &[u8], b: &[u8]) -> Option<u64> {
-    let mut sum = 0;
     if a.len() != b.len() {
         None
     }
     else {
-        for i in 0..a.len() {
-            sum += u64::from((a[i] ^ b[i]).count_ones());
-        }
-        Some(sum)
+        let pairs = a.iter().zip(b.iter());
+        Some(pairs
+            .map(|(a, b)| u64::from((a^b).count_ones()))
+            .sum())
     }
 }
 
