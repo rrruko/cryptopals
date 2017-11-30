@@ -33,9 +33,9 @@ fn test_base64() {
 }
 
 fn identity(v: &[u8]) {
-    let enc = &base64_encode(v);
-    let dec = &base64_decode(enc);
-    assert_eq!(&v, &dec);
+    let enc: &[u8] = &base64_encode(v);
+    let dec: &[u8] = &base64_decode(enc);
+    assert_eq!(v, dec);
 }
 
 fn _1() {
