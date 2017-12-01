@@ -220,10 +220,8 @@ fn diff(v1: &[f32], v2: &[f32]) -> Option<f32> {
 
 fn histo(s: &str) -> Vec<f32> {
     let mut v = vec![0.0; 26];
-    for ch in s.bytes() {
-        if let Some(ix) = alph(ch) {
-            v[ix as usize] += 1.0 / s.len() as f32;
-        }
+    for ix in s.bytes().filter_map(alph) {
+        v[ix as usize] += 1.0 / s.len() as f32;
     }
     v
 }
