@@ -212,11 +212,9 @@ fn diff(v1: &[f32], v2: &[f32]) -> Option<f32> {
         None
     }
     else {
-        let mut del = 0.0;
-        for i in 0..v1.len() - 1 {
-            del += (v1[i] - v2[i]).abs()
-        }
-        Some(del)
+        Some(zip(v1, v2)
+            .map(|(a, b)| (a - b).abs())
+            .sum())
     }
 }
 
