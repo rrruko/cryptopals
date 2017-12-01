@@ -147,14 +147,9 @@ fn transpose(s: &[u8], width: usize) -> Vec<Vec<u8>> {
 }
 
 fn hamming(a: &[u8], b: &[u8]) -> Option<u64> {
-    if a.len() != b.len() {
-        None
-    }
-    else {
-        Some(zip(a, b)
-            .map(|(a, b)| u64::from((a ^ b).count_ones()))
-            .sum())
-    }
+    fixed_xor(a, b).map(|v|
+        v.iter().map(|x| u64::from(x.count_ones())).sum()
+    )
 }
 
 fn repeating_xor(bytes: &[u8], key: &[u8]) -> Vec<u8> {
@@ -252,11 +247,7 @@ fn fixed_xor(a: &[u8], b: &[u8]) -> Option<Vec<u8>> {
         None
     }
     else {
-        let mut out = Vec::new();
-        for i in 0..a.len() {
-            out.push(a[i] ^ b[i]);
-        }
-        Some(out)
+        Some(zip(a, b).map(|(a, b)| a ^ b).collect())
     }
 }
 
@@ -332,7 +323,7 @@ fn base64_decode(data: &[u8]) -> Vec<u8> {
             .filter_map(|x| x)
             .map(|x| x as u8)
             .collect();
-        
+
         // Convert the four 6-bit indices into three bytes,
         // fewer if there were any `=`s
         let v =
