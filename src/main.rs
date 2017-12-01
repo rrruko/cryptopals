@@ -158,12 +158,10 @@ fn hamming(a: &[u8], b: &[u8]) -> Option<u64> {
 }
 
 fn repeating_xor(bytes: &[u8], key: &[u8]) -> Vec<u8> {
-    let mut out = Vec::new();
-    for i in 0..bytes.len() {
-        let key_i = key[i % key.len()];
-        out.push(bytes[i] ^ key_i);
-    }
-    out
+    bytes.iter()
+        .zip(key.iter().cycle())
+        .map(|(b, k)| b ^ k)
+        .collect()
 }
 
 fn decrypt_single_byte_xor(bytes: &[u8]) -> Result<(String, u8), std::str::Utf8Error> {
