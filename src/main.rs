@@ -43,7 +43,7 @@ fn _1() {
     let mut file = File::open("data/1.txt").expect("no 1.txt");
     let mut contents = String::new();
     file.read_to_string(&mut contents).expect("Couldn't read to string");
-    let contents = contents.trim();
+    let contents = contents.trim().as_bytes();
     let bytes = base16_decode(contents);
     let base64enc = base64_encode(bytes.as_slice());
     assert_eq!(
@@ -52,19 +52,19 @@ fn _1() {
 }
 
 fn _2() {
-    let xor1 = "1c0111001f010100061a024b53535009181c";
-    let xor2 = "686974207468652062756c6c277320657965";
-    let res  = "746865206b696420646f6e277420706c6179";
+    let xor1 = b"1c0111001f010100061a024b53535009181c";
+    let xor2 = b"686974207468652062756c6c277320657965";
+    let res  = b"746865206b696420646f6e277420706c6179";
 
     let ans = fixed_xor(
         &base16_decode(xor1),
         &base16_decode(xor2)
     ).unwrap();
-    assert_eq!(base16_encode(&ans), res);
+    assert_eq!(base16_encode(&ans)[..], res[..]);
 }
 
 fn _3() {
-    let code = "1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736";
+    let code = b"1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736";
     let bytes = base16_decode(code);
     let ans = decrypt_single_byte_xor(&bytes).unwrap().0;
     assert_eq!("Cooking MC's like a pound of bacon", ans);
@@ -75,7 +75,7 @@ fn _4() {
     let buf_reader = BufReader::new(file);
     let l = buf_reader.lines();
     for line in l {
-        let bytes = base16_decode(&line.expect("no line"));
+        let bytes = base16_decode(line.expect("no line").as_bytes());
         if let Ok(res) = decrypt_single_byte_xor(&bytes) {
             println!("{}", res.0);
         }
@@ -87,7 +87,7 @@ fn _5() {
     let key = b"ICE";
 
     let enc = repeating_xor(raw, key);
-    let expected = "0b3637272a2b2e63622c2e69692a23693a2a3c6324202d623d63343c2a26226324272765272a282b2f20430a652e2c652a3124333a653e2b2027630c692b20283165286326302e27282f";
+    let expected = b"0b3637272a2b2e63622c2e69692a23693a2a3c6324202d623d63343c2a26226324272765272a282b2f20430a652e2c652a3124333a653e2b2027630c692b20283165286326302e27282f";
     assert_eq!(enc, base16_decode(expected));
 
     let dec = repeating_xor(&enc, key);
@@ -159,13 +159,12 @@ fn repeating_xor(bytes: &[u8], key: &[u8]) -> Vec<u8> {
         .collect()
 }
 
-fn decrypt_single_byte_xor(bytes: &[u8]) -> Result<(String, u8), std::str::Utf8Error> {
+fn decrypt_single_byte_xor(bytes: &[u8]) -> Result<(String, u8), str::Utf8Error> {
     let mut best_score = (0, std::f32::INFINITY);
     for key in 1..127 {
         let ch = vec![key; bytes.len()];
         let x = fixed_xor(bytes, &ch).expect("ack");
-        let plaintext = str::from_utf8(&x)?;
-        let s = score(plaintext);
+        let s = score(&x);
         if best_score.1 > s {
             best_score = (key, s);
         }
@@ -175,7 +174,7 @@ fn decrypt_single_byte_xor(bytes: &[u8]) -> Result<(String, u8), std::str::Utf8E
     str::from_utf8(&w).map(|x| (x.to_owned(), best_score.0))
 }
 
-fn score(s: &str) -> f32 {
+fn score(s: &[u8]) -> f32 {
     let english_freq = [
         8.167,
         1.492,
@@ -218,9 +217,9 @@ fn diff(v1: &[f32], v2: &[f32]) -> Option<f32> {
     }
 }
 
-fn histo(s: &str) -> Vec<f32> {
+fn histo(s: &[u8]) -> Vec<f32> {
     let mut v = vec![0.0; 26];
-    for ix in s.bytes().filter_map(alph) {
+    for ix in s.iter().cloned().filter_map(alph) {
         v[ix as usize] += 1.0 / s.len() as f32;
     }
     v
@@ -247,9 +246,9 @@ fn fixed_xor(a: &[u8], b: &[u8]) -> Option<Vec<u8>> {
     }
 }
 
-fn base16_decode(contents: &str) -> Vec<u8> {
+fn base16_decode(contents: &[u8]) -> Vec<u8> {
     let mut bytes = Vec::<u8>::new();
-    for byte in contents.as_bytes().chunks(2) {
+    for byte in contents.chunks(2) {
         let s = str::from_utf8(byte).unwrap();
         if let Ok(n) = u8::from_str_radix(s, 16) {
             bytes.push(n);
@@ -258,14 +257,19 @@ fn base16_decode(contents: &str) -> Vec<u8> {
     bytes
 }
 
-fn base16_encode(data: &[u8]) -> String {
+fn base16_to_utf8(encoded: &[u8]) -> Result<String, str::Utf8Error> {
+    let dec = base16_decode(encoded);
+    str::from_utf8(&dec).map(|s| s.to_string())
+}
+
+fn base16_encode(data: &[u8]) -> Vec<u8> {
     let table = b"0123456789abcdef";
-    let mut encoded = String::new();
+    let mut encoded = Vec::new();
     for byte in data {
         let up = byte / 16;
         let down = byte % 16;
         let out = [table[up as usize], table[down as usize]];
-        encoded.push_str(str::from_utf8(&out).unwrap());
+        encoded.extend(out.iter().cloned());
     }
     encoded
 }
