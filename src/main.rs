@@ -8,7 +8,8 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
 use std::option::Option;
-use std::str;
+use std::str::from_utf8;
+use std::str::Utf8Error;
 use std::vec::Vec;
 use itertools::Itertools;
 use itertools::zip;
@@ -48,7 +49,7 @@ fn _1() {
     let base64enc = base64_encode(bytes.as_slice());
     assert_eq!(
         "SSdtIGtpbGxpbmcgeW91ciBicmFpbiBsaWtlIGEgcG9pc29ub3VzIG11c2hyb29t",
-        str::from_utf8(&base64enc).unwrap());
+        from_utf8(&base64enc).unwrap());
 }
 
 fn _2() {
@@ -67,8 +68,9 @@ fn _2() {
 fn _3() {
     let code = b"1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736";
     let bytes = base16_decode(code);
-    let ans = decrypt_single_byte_xor(&bytes).unwrap().0;
-    assert_eq!("Cooking MC's like a pound of bacon", ans);
+    let ans = decrypt_single_byte_xor(&bytes).0;
+    assert_eq!("Cooking MC's like a pound of bacon",
+        from_utf8(&ans).unwrap());
 }
 
 fn _4() {
@@ -78,16 +80,17 @@ fn _4() {
     let mut best_rated = (std::f32::INFINITY, String::new());
     for line in l {
         let bytes = base16_decode(line.expect("no line").as_bytes());
-        if let Ok((res, _)) = decrypt_single_byte_xor(&bytes) {
-            let this_score = score(&res.as_bytes());
-            let printable: Vec<u8> = res.bytes().filter(ascii_printable).collect();
-            let printable_str = str::from_utf8(&printable).unwrap().to_string();
+        let res = decrypt_single_byte_xor(&bytes).0;
+        let this_score = score(&res);
+        if let Ok(string) = from_utf8(&res) {
+            let printable: Vec<u8> =
+                string.bytes().filter(|ch| ascii_printable(ch)).collect();
             if this_score < best_rated.0 {
-                best_rated = (this_score, printable_str);
+                best_rated = (this_score, from_utf8(&printable).unwrap().to_string());
             }
         }
     }
-    println!("{:?}", best_rated);
+    assert_eq!(best_rated.1, "nOWTHATTHEPARTYISJUMPING*");
 }
 
 fn _5() {
@@ -167,7 +170,7 @@ fn repeating_xor(bytes: &[u8], key: &[u8]) -> Vec<u8> {
         .collect()
 }
 
-fn decrypt_single_byte_xor(bytes: &[u8]) -> Result<(String, u8), str::Utf8Error> {
+fn decrypt_single_byte_xor(bytes: &[u8]) -> (Vec<u8>, u8) {
     let mut best_score = (0, std::f32::INFINITY);
     for key in 1..127 {
         let ch = vec![key; bytes.len()];
@@ -179,7 +182,7 @@ fn decrypt_single_byte_xor(bytes: &[u8]) -> Result<(String, u8), str::Utf8Error>
     }
 
     let w = fixed_xor(bytes, &vec![best_score.0; bytes.len()]).unwrap();
-    str::from_utf8(&w).map(|x| (x.to_owned(), best_score.0))
+    (w, best_score.0)
 }
 
 fn score(s: &[u8]) -> f32 {
@@ -258,7 +261,7 @@ fn fixed_xor(a: &[u8], b: &[u8]) -> Option<Vec<u8>> {
 fn base16_decode(contents: &[u8]) -> Vec<u8> {
     let mut bytes = Vec::<u8>::new();
     for byte in contents.chunks(2) {
-        let s = str::from_utf8(byte).unwrap();
+        let s = from_utf8(byte).unwrap();
         if let Ok(n) = u8::from_str_radix(s, 16) {
             bytes.push(n);
         }
@@ -266,9 +269,9 @@ fn base16_decode(contents: &[u8]) -> Vec<u8> {
     bytes
 }
 
-fn base16_to_utf8(encoded: &[u8]) -> Result<String, str::Utf8Error> {
+fn base16_to_utf8(encoded: &[u8]) -> Result<String, Utf8Error> {
     let dec = base16_decode(encoded);
-    str::from_utf8(&dec).map(|s| s.to_string())
+    from_utf8(&dec).map(|s| s.to_string())
 }
 
 fn base16_encode(data: &[u8]) -> Vec<u8> {
