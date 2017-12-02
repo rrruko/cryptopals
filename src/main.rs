@@ -34,9 +34,9 @@ fn test_base64() {
 }
 
 fn identity(v: &[u8]) {
-    let enc: &[u8] = &base64_encode(v);
-    let dec: &[u8] = &base64_decode(enc);
-    assert_eq!(v, dec);
+    let enc = &base64_encode(v);
+    let dec = &base64_decode(enc);
+    assert_eq!(v[..], dec[..]);
 }
 
 fn _1() {
@@ -60,6 +60,7 @@ fn _2() {
         &base16_decode(xor1),
         &base16_decode(xor2)
     ).unwrap();
+
     assert_eq!(base16_encode(&ans)[..], res[..]);
 }
 
@@ -77,7 +78,7 @@ fn _4() {
     for line in l {
         let bytes = base16_decode(line.expect("no line").as_bytes());
         if let Ok(res) = decrypt_single_byte_xor(&bytes) {
-            println!("{}", res.0);
+            println!("{}, {}", score(res.0.as_bytes()), res.0);
         }
     }
 }
