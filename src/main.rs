@@ -75,12 +75,19 @@ fn _4() {
     let file = File::open("data/4.txt").expect("no 4.txt");
     let buf_reader = BufReader::new(file);
     let l = buf_reader.lines();
+    let mut best_rated = (std::f32::INFINITY, String::new());
     for line in l {
         let bytes = base16_decode(line.expect("no line").as_bytes());
-        if let Ok(res) = decrypt_single_byte_xor(&bytes) {
-            println!("{}, {}", score(res.0.as_bytes()), res.0);
+        if let Ok((res, _)) = decrypt_single_byte_xor(&bytes) {
+            let this_score = score(&res.as_bytes());
+            let printable: Vec<u8> = res.bytes().filter(ascii_printable).collect();
+            let printable_str = str::from_utf8(&printable).unwrap().to_string();
+            if this_score < best_rated.0 {
+                best_rated = (this_score, printable_str);
+            }
         }
     }
+    println!("{:?}", best_rated);
 }
 
 fn _5() {
@@ -220,8 +227,9 @@ fn diff(v1: &[f32], v2: &[f32]) -> Option<f32> {
 
 fn histo(s: &[u8]) -> Vec<f32> {
     let mut v = vec![0.0; 26];
-    for ix in s.iter().cloned().filter_map(alph) {
-        v[ix as usize] += 1.0 / s.len() as f32;
+    let alpha_chars: Vec<u8> = s.iter().cloned().filter_map(alph).collect();
+    for ix in &alpha_chars {
+        v[*ix as usize] += 100.0 / alpha_chars.len() as f32;
     }
     v
 }
@@ -342,4 +350,8 @@ fn base64_decode(data: &[u8]) -> Vec<u8> {
         decoded.append(&mut octets);
     }
     decoded
+}
+
+fn ascii_printable(ch: &u8) -> bool {
+    *ch >= 32 && *ch <= 126
 }
