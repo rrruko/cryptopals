@@ -39,3 +39,15 @@ pub fn hamming(a: &[u8], b: &[u8]) -> Option<u64> {
         v.iter().map(|x| u64::from(x.count_ones())).sum()
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_hamming() {
+        let test = hamming(b"this is a test",
+                           b"wokka wokka!!!");
+        assert_eq!(test.unwrap(), 37);
+    }
+}
