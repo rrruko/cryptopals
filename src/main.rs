@@ -1,18 +1,21 @@
 #![feature(slice_patterns)]
 
-extern crate cryptopals;
 extern crate itertools;
+
+mod codec;
+mod stats;
+mod xor;
+
+use codec::*;
+use stats::*;
+use xor::*;
 
 use std::cmp::Ordering;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
-use std::option::Option;
 use std::str::from_utf8;
-use std::str::Utf8Error;
-use std::vec::Vec;
 use itertools::Itertools;
-use itertools::zip;
 
 fn main() {
     test();
@@ -139,7 +142,7 @@ fn _6() {
         pretty_print(from_utf8(&dec).unwrap());
         results.push(dec);
     }
-    results.sort_by(|x, y| float_cmp(score(x) as f64, score(y) as f64));
+    results.sort_by(|x, y| float_cmp(f64::from(score(x)), f64::from(score(y))));
     pretty_print(from_utf8(&results[0]).unwrap());
 }
 
@@ -167,204 +170,6 @@ fn transpose(s: &[u8], width: usize) -> Vec<Vec<u8>> {
         buffer.push(chunk);
     }
     buffer
-}
-
-fn hamming(a: &[u8], b: &[u8]) -> Option<u64> {
-    fixed_xor(a, b).map(|v|
-        v.iter().map(|x| u64::from(x.count_ones())).sum()
-    )
-}
-
-fn repeating_xor(bytes: &[u8], key: &[u8]) -> Vec<u8> {
-    bytes.iter()
-        .zip(key.iter().cycle())
-        .map(|(b, k)| b ^ k)
-        .collect()
-}
-
-fn decrypt_single_byte_xor(bytes: &[u8]) -> (Vec<u8>, u8) {
-    let mut best_score = (0, std::f32::INFINITY);
-    for key in 1..127 {
-        let ch = vec![key; bytes.len()];
-        let x = fixed_xor(bytes, &ch).expect("ack");
-        let s = score(&x);
-        if best_score.1 > s {
-            best_score = (key, s);
-        }
-    }
-
-    let w = fixed_xor(bytes, &vec![best_score.0; bytes.len()]).unwrap();
-    (w, best_score.0)
-}
-
-fn score(s: &[u8]) -> f32 {
-    let english_freq = [
-        8.167,
-        1.492,
-        2.782,
-        4.253,
-        12.702,
-        2.228,
-        2.015,
-        6.094,
-        6.966,
-        0.153,
-        0.772,
-        4.025,
-        2.406,
-        6.749,
-        7.507,
-        1.929,
-        0.095,
-        5.987,
-        6.327,
-        9.056,
-        2.758,
-        0.978,
-        2.360,
-        0.150,
-        1.974,
-        0.074
-    ];
-    diff(&histo(s), &english_freq).unwrap()
-}
-
-fn diff(v1: &[f32], v2: &[f32]) -> Option<f32> {
-    if v1.len() != v2.len() {
-        None
-    }
-    else {
-        Some(zip(v1, v2)
-            .map(|(a, b)| (a - b).abs())
-            .sum())
-    }
-}
-
-fn histo(s: &[u8]) -> Vec<f32> {
-    let mut v = vec![0.0; 26];
-    let alpha_chars: Vec<u8> = s.iter().cloned().filter_map(alph).collect();
-    for ix in &alpha_chars {
-        v[*ix as usize] += 100.0 / alpha_chars.len() as f32;
-    }
-    v
-}
-
-fn alph(c: u8) -> Option<u8> {
-    if c >= 65 && c <= 90 {
-        Some(c - 65)
-    }
-    else if c >= 97 && c <= 122 {
-        Some(c - 97)
-    }
-    else {
-        None
-    }
-}
-
-fn fixed_xor(a: &[u8], b: &[u8]) -> Option<Vec<u8>> {
-    if a.len() != b.len() {
-        None
-    }
-    else {
-        Some(zip(a, b).map(|(a, b)| a ^ b).collect())
-    }
-}
-
-fn base16_decode(contents: &[u8]) -> Vec<u8> {
-    let mut bytes = Vec::<u8>::new();
-    for byte in contents.chunks(2) {
-        let s = from_utf8(byte).unwrap();
-        if let Ok(n) = u8::from_str_radix(s, 16) {
-            bytes.push(n);
-        }
-    }
-    bytes
-}
-
-fn base16_to_utf8(encoded: &[u8]) -> Result<String, Utf8Error> {
-    let dec = base16_decode(encoded);
-    from_utf8(&dec).map(|s| s.to_string())
-}
-
-fn base16_encode(data: &[u8]) -> Vec<u8> {
-    let table = b"0123456789abcdef";
-    let mut encoded = Vec::new();
-    for byte in data {
-        let up = byte / 16;
-        let down = byte % 16;
-        let out = [table[up as usize], table[down as usize]];
-        encoded.extend(out.iter().cloned());
-    }
-    encoded
-}
-
-// warning: this sucks
-fn base64_encode(data: &[u8]) -> Vec<u8> {
-    let table = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut encoded = Vec::new();
-    for triplet in data.chunks(3) {
-        let out = match *triplet {
-            [a] => {
-                let bits = a as usize * 256 * 256;
-                [ table[ bits >> 18      ]
-                , table[(bits >> 12) % 64]
-                , 61
-                , 61
-                ]
-            },
-            [a,b] => {
-                let bits = a as usize * 256 * 256 + b as usize * 256;
-                [ table[ bits >> 18      ]
-                , table[(bits >> 12) % 64]
-                , table[(bits >> 6 ) % 64]
-                , 61
-                ]
-            },
-            [a,b,c] => {
-                let bits = a as usize * 256 * 256 + b as usize * 256 + c as usize;
-                [ table[ bits >> 18      ]
-                , table[(bits >> 12) % 64]
-                , table[(bits >> 6 ) % 64]
-                , table[ bits        % 64]
-                ]
-            },
-            _ => {
-                unreachable!()
-            },
-        };
-        encoded.extend(out.iter().cloned());
-    }
-    encoded
-}
-
-fn base64_decode(data: &[u8]) -> Vec<u8> {
-    let table = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut decoded = Vec::<u8>::new();
-    for quartet in data.chunks(4) {
-        let indices: Vec<u8> = quartet
-            .iter()
-            .map(|x| table.iter().position(|y| y == x))
-            .filter_map(|x| x)
-            .map(|x| x as u8)
-            .collect();
-
-        // Convert the four 6-bit indices into three bytes,
-        // fewer if there were any `=`s
-        let v =
-            [(*indices.get(0).unwrap_or(&0) << 2) + (*indices.get(1).unwrap_or(&0) >> 4)
-            ,(*indices.get(1).unwrap_or(&0) << 4) + (*indices.get(2).unwrap_or(&0) >> 2)
-            ,(*indices.get(2).unwrap_or(&0) << 6) + (*indices.get(3).unwrap_or(&0))
-            ];
-
-        // There's probably a better way to do this?
-        let mut octets = Vec::<u8>::new();
-        for x in v.iter().take(indices.len() - 1) {
-            octets.push(*x);
-        }
-
-        decoded.append(&mut octets);
-    }
-    decoded
 }
 
 fn ascii_printable(ch: &u8) -> bool {
