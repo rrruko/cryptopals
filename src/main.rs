@@ -113,7 +113,7 @@ fn _6() {
     let mut base64_bytes = Vec::new();
     file.read_to_end(&mut base64_bytes).unwrap();
     base64_bytes = base64_bytes.into_iter().filter(|&x| x > 32).collect();
-    println!("{:?}", &base64_bytes);
+    println!("{:?}", base64_bytes);
     let bytes = base64_decode(&base64_bytes);
     println!("{:?}", bytes);
     let mut key_scores = Vec::<(usize, f64)>::new();
@@ -124,19 +124,31 @@ fn _6() {
         key_scores.push((keysize, dist));
     }
     key_scores.sort_by(|&a, &b| float_cmp(a.1, b.1));
-    let nedist = key_scores[0];
-    println!("{:?}", key_scores);
-    println!("keysize is {}. smallest normalized edit distance is {}.",
-             nedist.0, nedist.1);
 
-    for block in bytes.chunks(nedist.0) {
-        println!("> {:?}", block);
+    let mut results: Vec<Vec<u8>> = Vec::new();
+    for (keysize, nedist) in key_scores {
+        println!("trying keysize {} with nedist {}", keysize, nedist);
+        let bytes_t = transpose(&bytes, keysize);
+        let the_key: Vec<u8> =
+            bytes_t
+                .iter()
+                .map(|block| decrypt_single_byte_xor(block).1)
+                .collect();
+        let dec: Vec<u8> = repeating_xor(&bytes, &the_key)
+                .into_iter().filter(ascii_printable).collect();
+        pretty_print(from_utf8(&dec).unwrap());
+        results.push(dec);
     }
-    println!("{}", bytes.len());
-    let bytes_t = transpose(&bytes, nedist.0);
-    for block in bytes_t {
-        println!("{:?}", block);
-    }
+    results.sort_by(|x, y| float_cmp(score(x) as f64, score(y) as f64));
+    pretty_print(from_utf8(&results[0]).unwrap());
+}
+
+fn pretty_print(s: &str) {
+    let ansi_set_fg_blue = "\u{001b}[1;34m";
+    let ansi_reset_color = "\u{001b}[1;0m";
+    print!("{}", ansi_set_fg_blue);
+    print!("{}", s);
+    println!("{}", ansi_reset_color);
 }
 
 fn float_cmp(a: f64, b: f64) -> Ordering {
