@@ -1,3 +1,4 @@
+use aes::*;
 use codec::*;
 use stats::*;
 use xor::*;
@@ -17,6 +18,7 @@ pub fn set_1() {
     _4();
     _5();
     _6();
+    _7();
 }
 
 fn _1() {
@@ -124,6 +126,13 @@ fn _6() {
     let answer = from_utf8(&results[0]).unwrap();
 
     assert_eq!(answer, include_str!("../data/6_result.txt"));
+}
+
+fn _7() {
+    let key = b"YELLOW SUBMARINE";
+    let enc = include_bytes!("../data/7.txt");
+    let dec = aes128_decode(enc, *key);
+    println!("{}", from_utf8(&dec[..]).unwrap());
 }
 
 fn float_cmp(a: f64, b: f64) -> Ordering {
