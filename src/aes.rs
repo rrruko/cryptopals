@@ -10,9 +10,8 @@ fn sub_bytes(state: State) -> State {
     state.map(|e| S_BOX[e as usize])
 }
 
-// ??? I have no idea how to write this better
-unsafe fn shift_rows(state: State) -> State {
-    Matrix4::from_fn(|r, c| *state.get_unchecked(r, (c + r) % 4))
+fn shift_rows(state: State) -> State {
+    Matrix4::from_fn(|r, c| unsafe { *state.get_unchecked(r, (c + r) % 4) })
 }
 
 #[cfg(test)]
@@ -46,6 +45,6 @@ mod tests {
              6,  7,  8,  5,
             11, 12,  9, 10,
             16, 13, 14, 15);
-        unsafe { assert_eq!(shift_rows(state), result); }
+        assert_eq!(shift_rows(state), result);
     }
 }
