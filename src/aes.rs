@@ -17,9 +17,10 @@ fn xor(a: [u8; 4], b: [u8; 4]) -> [u8; 4] {
 
 /* AES-128 */
 
-// aes128_ecb_encode and aes128_ecb_decode don't yet handle input lengths not
-// divisible by 16 bytes because I'm lazy.
-pub fn aes128_ecb_encode(bytes: &[u8], key: [u8; 16]) -> Vec<u8> {
+pub fn aes128_ecb_encode(bytes: &[u8], key: [u8; 16]) -> Result<Vec<u8>, &str> {
+    if bytes.len() % 16 != 0 {
+        return Err("Input length was not a multiple of 16. You may need to pad it.")
+    }
     let mut out = Vec::<u8>::new();
     for chunk in bytes.chunks(16) {
         let chunk_enc = from_matrix(
@@ -27,10 +28,13 @@ pub fn aes128_ecb_encode(bytes: &[u8], key: [u8; 16]) -> Vec<u8> {
         );
         out.extend(chunk_enc);
     }
-    out
+    Ok(out)
 }
 
-pub fn aes128_ecb_decode(bytes: &[u8], key: [u8; 16]) -> Vec<u8> {
+pub fn aes128_ecb_decode(bytes: &[u8], key: [u8; 16]) -> Result<Vec<u8>, &str> {
+    if bytes.len() % 16 != 0 {
+        return Err("Input length was not a multiple of 16.")
+    }
     let mut out = Vec::<u8>::new();
     for chunk in bytes.chunks(16) {
         let chunk_enc = from_matrix(
@@ -38,7 +42,39 @@ pub fn aes128_ecb_decode(bytes: &[u8], key: [u8; 16]) -> Vec<u8> {
         );
         out.extend(chunk_enc);
     }
-    out
+    Ok(out)
+}
+
+// The input data is padded to the next multiple of 16 above its
+// actual length. That is, if the length is perfectly divisible by 16, we pad
+// with 0x10 16 times. Otherwise, we pad with the number of missing bytes; e.g.
+// if the last chunk of the input is [8, 6, 7, 5, 3, 0, 9], there are 9 missing
+// bytes, so it is padded to [8, 6, 7, 5, 3, 0, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9].
+pub fn aes128_ecb_encode_pad(bytes: &[u8], key: [u8; 16]) -> Vec<u8> {
+    // Length is next multiple of 16 above the original length.
+    let new_length = ((bytes.len() / 16) + 1) * 16;
+    let mut padded = vec![0; new_length];
+    for i in 0..bytes.len() {
+        padded[i] = bytes[i];
+    }
+    for i in bytes.len()..new_length {
+        padded[i] = (new_length - bytes.len()) as u8;
+    }
+    aes128_ecb_encode(&padded, key).expect(
+        "AES encryption function returned an error, but the input was padded!"
+    )
+}
+
+// Since we always pad the input to aes128_ecb_encode, the last byte of the
+// decoded message is always padding, and it always tells us how many bytes
+// we padded with. So before returning the result of decryption, we cut off
+// that number of bytes.
+pub fn aes128_ecb_decode_pad(bytes: &[u8], key: [u8; 16]) -> Result<Vec<u8>, &str> {
+    let d = aes128_ecb_decode(bytes, key);
+    d.map(|dec| {
+        let padding_count = dec[dec.len() - 1] as usize;
+        dec[..dec.len() - padding_count].to_vec()
+    })
 }
 
 fn rotate(input: [u8; 4]) -> [u8; 4] {
@@ -347,11 +383,37 @@ mod tests {
             0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
             0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f
         ];
-        let enc = [
+        let goal_enc = [
             0x69, 0xc4, 0xe0, 0xd8, 0x6a, 0x7b, 0x04, 0x30,
             0xd8, 0xcd, 0xb7, 0x80, 0x70, 0xb4, 0xc5, 0x5a
         ];
-        assert_eq!(aes128_ecb_encode(&plaintext, key), enc);
-        assert_eq!(aes128_ecb_decode(&enc, key), plaintext);
+        let real_enc = aes128_ecb_encode(&plaintext, key);
+        assert_eq!(aes128_ecb_encode(&plaintext, key), goal_enc);
+        assert_eq!(aes128_ecb_decode(&real_enc, key), plaintext);
+    }
+
+    #[test]
+    fn test_aes_padding() {
+        let plaintext = [
+            0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+            0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee
+        ];
+        let key = [
+            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+            0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f
+        ];
+        let enc = aes128_ecb_encode_pad(&plaintext, key);
+        assert_eq!(aes128_ecb_decode_pad(&enc, key), plaintext);
+
+        let plaintext = [
+            0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+            0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff
+        ];
+        let key = [
+            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+            0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f
+        ];
+        let enc = aes128_ecb_encode_pad(&plaintext, key);
+        assert_eq!(aes128_ecb_decode_pad(&enc, key), plaintext);
     }
 }
