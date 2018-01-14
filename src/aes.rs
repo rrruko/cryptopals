@@ -1,6 +1,5 @@
 use na::{Matrix4};
 use s_box::*;
-use std::str;
 
 type State = Matrix4<u8>;
 
@@ -19,7 +18,7 @@ fn xor(a: [u8; 4], b: [u8; 4]) -> [u8; 4] {
 /* AES-128 */
 
 // aes128_ecb_encode and aes128_ecb_decode don't yet handle input lengths not
-// divisible by 16 bytes because I'm lazy
+// divisible by 16 bytes because I'm lazy.
 pub fn aes128_ecb_encode(bytes: &[u8], key: [u8; 16]) -> Vec<u8> {
     let mut out = Vec::<u8>::new();
     for chunk in bytes.chunks(16) {
@@ -77,14 +76,7 @@ fn aes128_key_schedule(key: [u8; 16], num_bytes: u8) -> Vec<u8> {
         ];
         next4 = core(next4, i);
         i += 1;
-        next4 = xor(next4, [
-            out[out.len() - n],
-            out[out.len() - n + 1],
-            out[out.len() - n + 2],
-            out[out.len() - n + 3]
-        ]);
-        out.extend(next4.iter());
-        for _ in 0..3 {
+        for _ in 0..4 {
             next4 = xor(next4, [
                 out[out.len() - n],
                 out[out.len() - n + 1],
@@ -249,15 +241,15 @@ mod tests {
     #[test]
     fn test_to_matrix() {
         let m = to_matrix(&[
-              1,  2,  3,  4,
-              5,  6,  7,  8,
-              9, 10, 11, 12,
-             13, 14, 15, 16]);
+             1,  2,  3,  4,
+             5,  6,  7,  8,
+             9, 10, 11, 12,
+            13, 14, 15, 16]);
         let res = Matrix4::new(
-              1,  5,  9, 13,
-              2,  6, 10, 14,
-              3,  7, 11, 15,
-              4,  8, 12, 16);
+            1,  5,  9, 13,
+            2,  6, 10, 14,
+            3,  7, 11, 15,
+            4,  8, 12, 16);
         assert_eq!(m, res);
     }
 
@@ -333,15 +325,6 @@ mod tests {
     }
 
     #[test]
-    fn test_aes_invertible() {
-        let key = b"YELLOW SUBMARINE";
-        let plaintext: &[u8] = b"in america you have to make mass";
-        let enc = aes128_ecb_encode(plaintext, *key);
-        let dec = aes128_ecb_decode(&enc[..], *key);
-        assert_eq!(plaintext, &dec[..]);
-    }
-
-    #[test]
     fn test_aes128_round_inv() {
         let state = Matrix4::from_fn(|r, c| (r * 4 + c) as u8);
         let subkey = Matrix4::new(
@@ -350,5 +333,25 @@ mod tests {
             0x01, 0x01, 0x01, 0x01,
             0xc6, 0xc6, 0xc6, 0xc6);
         assert_eq!(aes128_round_inv(aes128_round(state, subkey), subkey), state);
+    }
+
+    #[test]
+    fn test_aes() {
+        // Yanked from AES spec
+        // (http://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.197.pdf)
+        let plaintext = [
+            0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+            0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff
+        ];
+        let key = [
+            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+            0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f
+        ];
+        let enc = [
+            0x69, 0xc4, 0xe0, 0xd8, 0x6a, 0x7b, 0x04, 0x30,
+            0xd8, 0xcd, 0xb7, 0x80, 0x70, 0xb4, 0xc5, 0x5a
+        ];
+        assert_eq!(aes128_ecb_encode(&plaintext, key), enc);
+        assert_eq!(aes128_ecb_decode(&enc, key), plaintext);
     }
 }
