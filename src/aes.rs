@@ -53,8 +53,8 @@ fn rotate(input: [u8; 4]) -> [u8; 4] {
 fn core(input: [u8; 4], i: usize) -> [u8; 4] {
     let mut output = input;
     output = rotate(output);
-    for i in 0..4 {
-        output[i] = S_BOX[output[i] as usize];
+    for j in 0..4 {
+        output[j] = S_BOX[output[j] as usize];
     }
     let rcon = |x| [
         0x8d, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36,
