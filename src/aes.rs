@@ -18,19 +18,25 @@ fn xor(a: [u8; 4], b: [u8; 4]) -> [u8; 4] {
 
 /* AES-128 */
 
-pub fn aes128_encode(bytes: &[u8], key: [u8; 16]) -> Vec<u8> {
+// aes128_ecb_encode and aes128_ecb_decode don't yet handle input lengths not
+// divisible by 16 bytes because I'm lazy
+pub fn aes128_ecb_encode(bytes: &[u8], key: [u8; 16]) -> Vec<u8> {
     let mut out = Vec::<u8>::new();
     for chunk in bytes.chunks(16) {
-        let chunk_enc = from_matrix(aes128_chunk(to_matrix(chunk), key));
+        let chunk_enc = from_matrix(
+            aes128_chunk(to_matrix(chunk), key)
+        );
         out.extend(chunk_enc);
     }
     out
 }
 
-pub fn aes128_decode(bytes: &[u8], key: [u8; 16]) -> Vec<u8> {
+pub fn aes128_ecb_decode(bytes: &[u8], key: [u8; 16]) -> Vec<u8> {
     let mut out = Vec::<u8>::new();
     for chunk in bytes.chunks(16) {
-        let chunk_enc = from_matrix(aes128_decode_chunk(to_matrix(chunk), key));
+        let chunk_enc = from_matrix(
+            aes128_decode_chunk(to_matrix(chunk), key)
+        );
         out.extend(chunk_enc);
     }
     out
@@ -64,9 +70,9 @@ fn aes128_key_schedule(key: [u8; 16], num_bytes: u8) -> Vec<u8> {
     let n = 16;
     while out.len() < num_bytes as usize {
         let mut next4 = [
-            out[out.len() - 4], 
-            out[out.len() - 3], 
-            out[out.len() - 2], 
+            out[out.len() - 4],
+            out[out.len() - 3],
+            out[out.len() - 2],
             out[out.len() - 1]
         ];
         next4 = core(next4, i);
@@ -75,16 +81,16 @@ fn aes128_key_schedule(key: [u8; 16], num_bytes: u8) -> Vec<u8> {
             out[out.len() - n],
             out[out.len() - n + 1],
             out[out.len() - n + 2],
-            out[out.len() - n + 3]]
-        );
+            out[out.len() - n + 3]
+        ]);
         out.extend(next4.iter());
         for _ in 0..3 {
             next4 = xor(next4, [
-                out[out.len() - n], 
+                out[out.len() - n],
                 out[out.len() - n + 1],
                 out[out.len() - n + 2],
-                out[out.len() - n + 3]]
-            );
+                out[out.len() - n + 3]
+            ]);
             out.extend(next4.iter());
         }
     }
@@ -94,18 +100,18 @@ fn aes128_key_schedule(key: [u8; 16], num_bytes: u8) -> Vec<u8> {
 fn aes128_chunk(state: State, key: [u8; 16]) -> State {
     let rijndael_key = aes128_key_schedule(key, 176);
     let mut state = aes128_initial_round(state, to_matrix(&rijndael_key[0..16]));
-    for i in 1..9 {
+    for i in 1..10 {
         let round_subkey = to_matrix(&rijndael_key[16 * i..16 * (i+1)]);
         state = aes128_round(state, round_subkey);
     }
-    aes128_final_round(state, to_matrix(&rijndael_key[16 * 9..16 * 10]))
+    aes128_final_round(state, to_matrix(&rijndael_key[16 * 10..16 * 11]))
 }
 
 fn aes128_decode_chunk(state: State, key: [u8; 16]) -> State {
     let rijndael_key = aes128_key_schedule(key, 176);
-    let mut state = aes128_final_inv(state, to_matrix(&rijndael_key[16 * 9 .. 16 * 10]));
-    for i in 1..9 {
-        let round_subkey = to_matrix(&rijndael_key[16 * (9 - i) .. 16 * (10 - i)]);
+    let mut state = aes128_final_inv(state, to_matrix(&rijndael_key[16 * 10 .. 16 * 11]));
+    for i in 1..10 {
+        let round_subkey = to_matrix(&rijndael_key[16 * (10 - i) .. 16 * (11 - i)]);
         state = aes128_round_inv(state, round_subkey);
     }
     aes128_initial_inv(state, to_matrix(&rijndael_key[0..16]))
@@ -131,7 +137,7 @@ fn aes128_round_inv(state: State, subkey: Matrix4<u8>) -> State {
     let mut state = inv_add_round_key(state, subkey);
     state = inv_mix_columns(state);
     state = inv_shift_rows(state);
-    
+
     inv_sub_bytes(state)
 }
 
@@ -225,8 +231,8 @@ fn inv_mix_columns(state: State) -> State {
 
 fn add_round_key(state: State, subkey: Matrix4<u8>) -> State {
     unsafe {
-        Matrix4::from_fn(|r, c| 
-            *state.get_unchecked(r, c) ^ 
+        Matrix4::from_fn(|r, c|
+            *state.get_unchecked(r, c) ^
             *subkey.get_unchecked(r, c)
         )
     }
@@ -239,6 +245,21 @@ fn inv_add_round_key(state: State, subkey: Matrix4<u8>) -> State {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_to_matrix() {
+        let m = to_matrix(&[
+              1,  2,  3,  4,
+              5,  6,  7,  8,
+              9, 10, 11, 12,
+             13, 14, 15, 16]);
+        let res = Matrix4::new(
+              1,  5,  9, 13,
+              2,  6, 10, 14,
+              3,  7, 11, 15,
+              4,  8, 12, 16);
+        assert_eq!(m, res);
+    }
 
     #[test]
     fn test_rotate() {
@@ -312,11 +333,11 @@ mod tests {
     }
 
     #[test]
-    fn test_aes_decode() {
+    fn test_aes_invertible() {
         let key = b"YELLOW SUBMARINE";
         let plaintext: &[u8] = b"in america you have to make mass";
-        let enc = aes128_encode(plaintext, *key);
-        let dec = aes128_decode(&enc[..], *key);
+        let enc = aes128_ecb_encode(plaintext, *key);
+        let dec = aes128_ecb_decode(&enc[..], *key);
         assert_eq!(plaintext, &dec[..]);
     }
 

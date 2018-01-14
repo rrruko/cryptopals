@@ -130,9 +130,9 @@ fn _6() {
 
 fn _7() {
     let key = b"YELLOW SUBMARINE";
-    let enc = include_bytes!("../data/7.txt");
-    let dec = aes128_decode(enc, *key);
-    println!("{}", from_utf8(&dec[..]).unwrap());
+    let enc = base64_decode(include_bytes!("../data/7.txt"));
+    let dec = aes128_ecb_decode(&enc[..], *key);
+    assert_eq!(dec[..dec.len() - 4], include_bytes!("../data/7_result.txt")[..]);
 }
 
 fn float_cmp(a: f64, b: f64) -> Ordering {
