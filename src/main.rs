@@ -1,3 +1,4 @@
+#![feature(entry_and_modify)]
 #![feature(slice_patterns)]
 
 extern crate itertools;
