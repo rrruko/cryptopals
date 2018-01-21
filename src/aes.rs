@@ -1,4 +1,5 @@
 use na::{Matrix4};
+use pkcs::*;
 use s_box::*;
 
 use std::collections::HashMap;
@@ -55,13 +56,7 @@ pub fn aes128_ecb_decode(bytes: &[u8], key: [u8; 16]) -> Result<Vec<u8>, &str> {
 pub fn aes128_ecb_encode_pad(bytes: &[u8], key: [u8; 16]) -> Vec<u8> {
     // Length is next multiple of 16 above the original length.
     let new_length = ((bytes.len() / 16) + 1) * 16;
-    let mut padded = vec![0; new_length];
-    for i in 0..bytes.len() {
-        padded[i] = bytes[i];
-    }
-    for i in bytes.len()..new_length {
-        padded[i] = (new_length - bytes.len()) as u8;
-    }
+    let padded = pkcs7(bytes, new_length).unwrap(); 
     aes128_ecb_encode(&padded, key).expect(
         "AES encryption function returned an error, but the input was padded!"
     )
@@ -73,10 +68,7 @@ pub fn aes128_ecb_encode_pad(bytes: &[u8], key: [u8; 16]) -> Vec<u8> {
 // that number of bytes.
 pub fn aes128_ecb_decode_pad(bytes: &[u8], key: [u8; 16]) -> Result<Vec<u8>, &str> {
     let d = aes128_ecb_decode(bytes, key);
-    d.map(|dec| {
-        let padding_count = dec[dec.len() - 1] as usize;
-        dec[..dec.len() - padding_count].to_vec()
-    })
+    d.map(|dec| undo_pkcs7(&dec))
 }
 
 fn rotate(input: [u8; 4]) -> [u8; 4] {
@@ -402,9 +394,9 @@ mod tests {
             0x69, 0xc4, 0xe0, 0xd8, 0x6a, 0x7b, 0x04, 0x30,
             0xd8, 0xcd, 0xb7, 0x80, 0x70, 0xb4, 0xc5, 0x5a
         ];
-        let real_enc = aes128_ecb_encode(&plaintext, key);
-        assert_eq!(aes128_ecb_encode(&plaintext, key), goal_enc);
-        assert_eq!(aes128_ecb_decode(&real_enc, key), plaintext);
+        let real_enc = aes128_ecb_encode(&plaintext, key).unwrap();
+        assert_eq!(aes128_ecb_encode(&plaintext, key).unwrap(), goal_enc);
+        assert_eq!(aes128_ecb_decode(&real_enc, key).unwrap(), plaintext);
     }
 
     #[test]
@@ -418,7 +410,7 @@ mod tests {
             0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f
         ];
         let enc = aes128_ecb_encode_pad(&plaintext, key);
-        assert_eq!(aes128_ecb_decode_pad(&enc, key), plaintext);
+        assert_eq!(aes128_ecb_decode_pad(&enc, key).unwrap(), plaintext);
 
         let plaintext = [
             0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
@@ -429,6 +421,6 @@ mod tests {
             0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f
         ];
         let enc = aes128_ecb_encode_pad(&plaintext, key);
-        assert_eq!(aes128_ecb_decode_pad(&enc, key), plaintext);
+        assert_eq!(aes128_ecb_decode_pad(&enc, key).unwrap(), plaintext);
     }
 }
