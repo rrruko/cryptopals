@@ -56,7 +56,7 @@ pub fn aes128_ecb_decode(bytes: &[u8], key: [u8; 16]) -> Result<Vec<u8>, &str> {
 pub fn aes128_ecb_encode_pad(bytes: &[u8], key: [u8; 16]) -> Vec<u8> {
     // Length is next multiple of 16 above the original length.
     let new_length = ((bytes.len() / 16) + 1) * 16;
-    let padded = pkcs7(bytes, new_length).unwrap(); 
+    let padded = pkcs7(bytes, new_length).unwrap();
     aes128_ecb_encode(&padded, key).expect(
         "AES encryption function returned an error, but the input was padded!"
     )
@@ -69,6 +69,21 @@ pub fn aes128_ecb_encode_pad(bytes: &[u8], key: [u8; 16]) -> Vec<u8> {
 pub fn aes128_ecb_decode_pad(bytes: &[u8], key: [u8; 16]) -> Result<Vec<u8>, &str> {
     let d = aes128_ecb_decode(bytes, key);
     d.map(|dec| undo_pkcs7(&dec))
+}
+
+pub fn aes128_cbc_decode_pad(bytes: &[u8], key: [u8; 16], iv: [u8; 16])
+    -> Result<Vec<u8>, &str> {
+    let mut out = Vec::<u8>::new();
+    let mut prev = iv;
+    for chunk in bytes.chunks(16) {
+        let mut dec = from_matrix(aes128_decode_chunk(to_matrix(&chunk), key));
+        for i in 0..dec.len() {
+            dec[i] = dec[i] ^ prev[i];
+        }
+        out.extend(dec);
+        prev.copy_from_slice(chunk);
+    }
+    Ok(undo_pkcs7(&out))
 }
 
 fn rotate(input: [u8; 4]) -> [u8; 4] {
