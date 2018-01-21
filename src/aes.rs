@@ -1,6 +1,8 @@
 use na::{Matrix4};
 use s_box::*;
 
+use std::collections::HashMap;
+
 type State = Matrix4<u8>;
 
 fn to_matrix(bytes: &[u8]) -> State {
@@ -268,6 +270,19 @@ fn add_round_key(state: State, subkey: Matrix4<u8>) -> State {
 
 fn inv_add_round_key(state: State, subkey: Matrix4<u8>) -> State {
     add_round_key(state, subkey)
+}
+
+// The higher the value of a key in the hashmap, the more that chunk appears
+// duplicated in the ciphertext, the more likely the use of ECB.
+pub fn detect_ecb(b: &[u8]) -> HashMap<&[u8], u32> {
+    let mut seen = HashMap::new();
+    for chunk in b.chunks(16) {
+        let cnk = chunk.clone();
+        seen.entry(cnk)
+            .and_modify(|n| { *n += 1 })
+            .or_insert(1);
+    }
+    seen
 }
 
 #[cfg(test)]
