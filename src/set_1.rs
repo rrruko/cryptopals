@@ -19,6 +19,7 @@ pub fn set_1() {
     _5();
     _6();
     _7();
+    _8();
 }
 
 fn _1() {
@@ -134,6 +135,25 @@ fn _7() {
     let dec = aes128_ecb_decode_pad(&enc[..], *key).unwrap();
     let res = include_bytes!("../data/7_result.txt");
     assert_eq!(dec[..], res[..]);
+}
+
+
+fn _8() {
+    let raw: Vec<Vec<u8>> = include_str!("../data/8.txt")
+        .lines()
+        .map(|l| base16_decode(l.as_bytes()))
+        .collect();
+
+    for enc in &raw {
+        println!("Checking {}...:", from_utf8(&base16_encode(&enc[0..8])).unwrap());
+        let analysis = detect_ecb(enc);
+        for (k, v) in analysis {
+            if v > 1 {
+                println!("  The block {} was repeated {} times.",
+                    from_utf8(&base16_encode(k)).unwrap(), v)
+            }
+        }
+    }
 }
 
 fn float_cmp(a: f64, b: f64) -> Ordering {
