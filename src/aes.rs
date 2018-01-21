@@ -76,9 +76,9 @@ pub fn aes128_cbc_decode_pad(bytes: &[u8], key: [u8; 16], iv: [u8; 16])
     let mut out = Vec::<u8>::new();
     let mut prev = iv;
     for chunk in bytes.chunks(16) {
-        let mut dec = from_matrix(aes128_decode_chunk(to_matrix(&chunk), key));
+        let mut dec = from_matrix(aes128_decode_chunk(to_matrix(chunk), key));
         for i in 0..dec.len() {
-            dec[i] = dec[i] ^ prev[i];
+            dec[i] ^= prev[i];
         }
         out.extend(dec);
         prev.copy_from_slice(chunk);
@@ -284,8 +284,7 @@ fn inv_add_round_key(state: State, subkey: Matrix4<u8>) -> State {
 pub fn detect_ecb(b: &[u8]) -> HashMap<&[u8], u32> {
     let mut seen = HashMap::new();
     for chunk in b.chunks(16) {
-        let cnk = chunk.clone();
-        seen.entry(cnk)
+        seen.entry(chunk)
             .and_modify(|n| { *n += 1 })
             .or_insert(1);
     }
