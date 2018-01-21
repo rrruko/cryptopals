@@ -137,7 +137,6 @@ fn _7() {
     assert_eq!(dec[..], res[..]);
 }
 
-
 fn _8() {
     let raw: Vec<Vec<u8>> = include_str!("../data/8.txt")
         .lines()
