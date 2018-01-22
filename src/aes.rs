@@ -14,10 +14,6 @@ fn from_matrix(state: State) -> Vec<u8> {
     state.data.as_slice().to_vec()
 }
 
-fn xor(a: [u8; 4], b: [u8; 4]) -> [u8; 4] {
-    [a[0] ^ b[0], a[1] ^ b[1], a[2] ^ b[2], a[3] ^ b[3]]
-}
-
 /* AES-128 */
 
 pub fn aes128_ecb_encode(bytes: &[u8], key: [u8; 16]) -> Result<Vec<u8>, &str> {
@@ -122,12 +118,9 @@ fn aes128_key_schedule(key: [u8; 16], num_bytes: u8) -> Vec<u8> {
         next4 = core(next4, i);
         i += 1;
         for _ in 0..4 {
-            next4 = xor(next4, [
-                out[out.len() - n],
-                out[out.len() - n + 1],
-                out[out.len() - n + 2],
-                out[out.len() - n + 3]
-            ]);
+            for i in 0..4 {
+                next4[i] ^= out[out.len() - n + i];
+            }
             out.extend(next4.iter());
         }
     }
