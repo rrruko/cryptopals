@@ -67,6 +67,25 @@ pub fn aes128_ecb_decode_pad(bytes: &[u8], key: [u8; 16]) -> Result<Vec<u8>, &st
     d.map(|dec| undo_pkcs7(&dec))
 }
 
+pub fn aes128_cbc_encode_pad(bytes: &[u8], key: [u8; 16], iv: [u8; 16])
+    -> Vec<u8> {
+    let new_length = ((bytes.len() / 16) + 1) * 16;
+    let bytes = pkcs7(bytes, new_length).unwrap();
+    let mut out = Vec::<u8>::new();
+    let mut prev = iv;
+    for chunk in bytes.chunks(16) {
+        let mut buf = [0; 16];
+        for i in 0..buf.len() {
+            buf[i] = chunk[i] ^ prev[i];
+        }
+        let enc = from_matrix(aes128_chunk(to_matrix(&buf), key));
+        out.extend(&enc);
+        prev.copy_from_slice(&enc);
+    }
+
+    out
+}
+
 pub fn aes128_cbc_decode_pad(bytes: &[u8], key: [u8; 16], iv: [u8; 16])
     -> Result<Vec<u8>, &str> {
     let mut out = Vec::<u8>::new();
@@ -429,5 +448,17 @@ mod tests {
         ];
         let enc = aes128_ecb_encode_pad(&plaintext, key);
         assert_eq!(aes128_ecb_decode_pad(&enc, key).unwrap(), plaintext);
+    }
+
+    #[test]
+    fn test_cbc_invertible() {
+        let plaintext = b"h-hewwo??";
+        let key = b"YELLOW SUBMARINE";
+        let iv = [
+            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+            0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f
+        ];
+        let enc = aes128_cbc_encode_pad(&plaintext[..], *key, iv);
+        assert_eq!(aes128_cbc_decode_pad(&enc, *key, iv).unwrap(), plaintext);
     }
 }

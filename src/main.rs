@@ -3,9 +3,11 @@
 
 extern crate itertools;
 extern crate nalgebra as na;
+extern crate rand;
 
 mod aes;
 mod codec;
+mod oracle;
 mod pkcs;
 mod s_box;
 mod stats;
