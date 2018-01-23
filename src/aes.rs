@@ -98,7 +98,10 @@ pub fn aes128_cbc_decode_pad(bytes: &[u8], key: [u8; 16], iv: [u8; 16])
         out.extend(dec);
         prev.copy_from_slice(chunk);
     }
-    Ok(undo_pkcs7(&out))
+    match undo_pkcs7_checked(&out) {
+        Some(res) => Ok(res),
+        None      => Err("Invalid padding")
+    }
 }
 
 fn rotate(input: [u8; 4]) -> [u8; 4] {
