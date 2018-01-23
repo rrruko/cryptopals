@@ -385,7 +385,7 @@ mod tests {
 
     #[test]
     fn test_key_schedule() {
-        let key = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
+        let key = [0; 16];
         let expanded = aes128_key_schedule(key, 176);
         assert_eq!(expanded[0], 0x0);
         assert_eq!(expanded[16], 0x62);
