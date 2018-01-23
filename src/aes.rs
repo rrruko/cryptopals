@@ -88,6 +88,9 @@ pub fn aes128_cbc_encode_pad(bytes: &[u8], key: [u8; 16], iv: [u8; 16])
 
 pub fn aes128_cbc_decode_pad(bytes: &[u8], key: [u8; 16], iv: [u8; 16])
     -> Result<Vec<u8>, &str> {
+    if bytes.len() % 16 != 0 {
+        return Err("Input length was not a multiple of 16.")
+    }
     let mut out = Vec::<u8>::new();
     let mut prev = iv;
     for chunk in bytes.chunks(16) {
