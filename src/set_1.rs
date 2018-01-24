@@ -98,7 +98,7 @@ fn _6() {
     let mut base64_bytes = Vec::new();
     file.read_to_end(&mut base64_bytes).unwrap();
     base64_bytes = base64_bytes.into_iter().filter(|&x| x > 32).collect();
-    let bytes = base64_decode(&base64_bytes);
+    let bytes = base64_decode(&base64_bytes).unwrap();
     let mut key_scores = Vec::<(usize, f64)>::new();
     for keysize in 2..40 {
         let f = &bytes[0..keysize];
@@ -131,7 +131,7 @@ fn _6() {
 
 fn _7() {
     let key = b"YELLOW SUBMARINE";
-    let enc = base64_decode(include_bytes!("../data/7.txt"));
+    let enc = base64_decode(include_bytes!("../data/7.txt")).unwrap();
     let dec = aes128_ecb_decode_pad(&enc[..], *key).unwrap();
     let res = include_bytes!("../data/7_result.txt");
     assert_eq!(dec[..], res[..]);

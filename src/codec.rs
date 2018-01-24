@@ -1,3 +1,5 @@
+use std::char;
+use std::cmp::min;
 use std::str::from_utf8;
 
 pub fn base16_encode(data: &[u8]) -> Vec<u8> {
@@ -25,7 +27,8 @@ pub fn base16_decode(contents: &[u8]) -> Vec<u8> {
 }
 
 pub fn base64_encode(data: &[u8]) -> Vec<u8> {
-    let table = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let table = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ\
+        abcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut encoded = Vec::new();
     for triplet in data.chunks(3) {
         let mut out = [61; 4];
@@ -45,28 +48,38 @@ pub fn base64_encode(data: &[u8]) -> Vec<u8> {
     encoded
 }
 
-pub fn base64_decode(data: &[u8]) -> Vec<u8> {
-    let table = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+pub fn base64_decode(data: &[u8]) -> Result<Vec<u8>, String> {
+    let table = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ\
+        abcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut decoded = Vec::<u8>::new();
     for quartet in data.chunks(4) {
-        let indices: Vec<u8> = quartet
-            .iter()
-            .map(|x| table.iter().position(|y| y == x))
-            .filter_map(|x| x)
-            .map(|x| x as u8)
-            .collect();
-
-        // Convert the four 6-bit indices into three bytes,
-        // fewer if there were any `=`s
-        let v =
-            [(*indices.get(0).unwrap_or(&0) << 2) + (*indices.get(1).unwrap_or(&0) >> 4)
-            ,(*indices.get(1).unwrap_or(&0) << 4) + (*indices.get(2).unwrap_or(&0) >> 2)
-            ,(*indices.get(2).unwrap_or(&0) << 6) + (*indices.get(3).unwrap_or(&0))
-            ];
-
-        decoded.extend(&v[..indices.len() - 1]);
+        let mut indices = [0; 4];
+        let mut non_pad_bytes = 4;
+        for i in 0..4 {
+            let byte = quartet[i];
+            if let Some(ix) = table.iter().position(|y| *y == byte) {
+                indices[i] = ix as u8;
+            } else if byte == 61 {
+                non_pad_bytes = min(non_pad_bytes, i);
+            } else {
+                return Err(format!(
+                    "Input contained invalid base64 character {}",
+                    char::from(byte)));
+            }
+        }
+        let v = [
+            (indices[0] << 2) + (indices[1] >> 4),
+            (indices[1] << 4) + (indices[2] >> 2),
+            (indices[2] << 6) + (indices[3]     )
+        ];
+        match non_pad_bytes {
+            4 => decoded.extend(&v[..3]),
+            3 => decoded.extend(&v[..2]),
+            2 => decoded.extend(&v[..1]),
+            _ => unreachable!()
+        }
     }
-    decoded
+    Ok(decoded)
 }
 
 #[cfg(test)]
@@ -77,11 +90,12 @@ mod tests {
     fn test_base64() {
         fn identity(v: &[u8]) {
             let enc = &base64_encode(v);
-            let dec = &base64_decode(enc);
+            let dec = &base64_decode(enc).unwrap();
             assert_eq!(v[..], dec[..]);
         }
         identity(b"Ringo mogire beam");
         identity(b"Ringo mogire beam!");
         identity(b"Ringo mogire beam!!");
+        identity(b"Ringo mogire beam!!!");
     }
 }
