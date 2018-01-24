@@ -24,40 +24,22 @@ pub fn base16_decode(contents: &[u8]) -> Vec<u8> {
     decoded
 }
 
-// warning: this sucks
 pub fn base64_encode(data: &[u8]) -> Vec<u8> {
     let table = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut encoded = Vec::new();
     for triplet in data.chunks(3) {
-        let out = match *triplet {
-            [a] => {
-                let bits = a as usize * 256 * 256;
-                [ table[ bits >> 18      ]
-                , table[(bits >> 12) % 64]
-                , 61
-                , 61
-                ]
-            },
-            [a,b] => {
-                let bits = a as usize * 256 * 256 + b as usize * 256;
-                [ table[ bits >> 18      ]
-                , table[(bits >> 12) % 64]
-                , table[(bits >> 6 ) % 64]
-                , 61
-                ]
-            },
-            [a,b,c] => {
-                let bits = a as usize * 256 * 256 + b as usize * 256 + c as usize;
-                [ table[ bits >> 18      ]
-                , table[(bits >> 12) % 64]
-                , table[(bits >> 6 ) % 64]
-                , table[ bits        % 64]
-                ]
-            },
-            _ => {
-                unreachable!()
-            },
-        };
+        let mut out = [61; 4];
+        let mut triplet_buf = [0; 3];
+        for i in 0..triplet.len() {
+            triplet_buf[i] = triplet[i];
+        }
+        let bits =
+            triplet_buf[0] as usize * 256 * 256 +
+            triplet_buf[1] as usize * 256 +
+            triplet_buf[2] as usize;
+        for i in 0..triplet.len() + 1 {
+            out[i] = table[(bits >> (6 * (3 - i))) % 64];
+        }
         encoded.extend(out.iter().cloned());
     }
     encoded
@@ -82,13 +64,7 @@ pub fn base64_decode(data: &[u8]) -> Vec<u8> {
             ,(*indices.get(2).unwrap_or(&0) << 6) + (*indices.get(3).unwrap_or(&0))
             ];
 
-        // There's probably a better way to do this?
-        let mut octets = Vec::<u8>::new();
-        for x in v.iter().take(indices.len() - 1) {
-            octets.push(*x);
-        }
-
-        decoded.append(&mut octets);
+        decoded.extend(&v[..indices.len() - 1]);
     }
     decoded
 }
