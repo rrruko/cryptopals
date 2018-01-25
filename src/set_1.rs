@@ -17,6 +17,7 @@ pub fn set_1() {
     _3();
     _4();
     _5();
+    println!("hello");
     _6();
     _7();
     _8();
@@ -27,7 +28,7 @@ fn _1() {
     let mut contents = String::new();
     file.read_to_string(&mut contents).expect("Couldn't read to string");
     let contents = contents.trim().as_bytes();
-    let bytes = base16_decode(contents);
+    let bytes = base16_decode_filter(contents);
     let base64enc = base64_encode(bytes.as_slice());
 
     assert_eq!(
@@ -41,8 +42,8 @@ fn _2() {
     let res  = b"746865206b696420646f6e277420706c6179";
 
     let ans = fixed_xor(
-        &base16_decode(xor1),
-        &base16_decode(xor2)
+        &base16_decode_filter(xor1),
+        &base16_decode_filter(xor2)
     ).unwrap();
 
     assert_eq!(base16_encode(&ans)[..], res[..]);
@@ -50,7 +51,7 @@ fn _2() {
 
 fn _3() {
     let code = b"1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736";
-    let bytes = base16_decode(code);
+    let bytes = base16_decode_filter(code);
     let ans = decrypt_single_byte_xor(&bytes).0;
 
     assert_eq!("Cooking MC's like a pound of bacon",
@@ -63,7 +64,7 @@ fn _4() {
     let l = buf_reader.lines();
     let mut best_rated = (INFINITY, String::new());
     for line in l {
-        let bytes = base16_decode(line.expect("no line").as_bytes());
+        let bytes = base16_decode_filter(line.expect("no line").as_bytes());
         let res = decrypt_single_byte_xor(&bytes).0;
         let this_score = score(&res);
         if let Ok(string) = from_utf8(&res) {
@@ -86,7 +87,7 @@ fn _5() {
     let enc = repeating_xor(raw, key);
     let expected = include_bytes!("../data/5_result.txt");
 
-    assert_eq!(enc, base16_decode(expected));
+    assert_eq!(enc, base16_decode_filter(expected));
 
     let dec = repeating_xor(&enc, key);
 
@@ -97,8 +98,7 @@ fn _6() {
     let mut file = File::open("data/6.txt").expect("no 6.txt");
     let mut base64_bytes = Vec::new();
     file.read_to_end(&mut base64_bytes).unwrap();
-    base64_bytes = base64_bytes.into_iter().filter(|&x| x > 32).collect();
-    let bytes = base64_decode(&base64_bytes).unwrap();
+    let bytes = base64_decode_filter(&base64_bytes);
     let mut key_scores = Vec::<(usize, f64)>::new();
     for keysize in 2..40 {
         let f = &bytes[0..keysize];
@@ -131,7 +131,7 @@ fn _6() {
 
 fn _7() {
     let key = b"YELLOW SUBMARINE";
-    let enc = base64_decode(include_bytes!("../data/7.txt")).unwrap();
+    let enc = base64_decode_filter(include_bytes!("../data/7.txt"));
     let dec = aes128_ecb_decode_pad(&enc[..], *key).unwrap();
     let res = include_bytes!("../data/7_result.txt");
     assert_eq!(dec[..], res[..]);
@@ -140,7 +140,7 @@ fn _7() {
 fn _8() {
     let raw: Vec<Vec<u8>> = include_str!("../data/8.txt")
         .lines()
-        .map(|l| base16_decode(l.as_bytes()))
+        .map(|l| base16_decode_filter(l.as_bytes()))
         .collect();
 
     for enc in &raw {

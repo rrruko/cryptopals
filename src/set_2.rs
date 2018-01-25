@@ -19,11 +19,7 @@ fn _9() {
 
 fn _10() {
     let file = include_bytes!("../data/10.txt");
-    let file = &file.iter().cloned()
-        .filter(|&b| !char::from(b).is_whitespace())
-        .collect::<Vec<u8>>()[..];
-
-    let dec = base64_decode(file).unwrap();
+    let dec = base64_decode_filter(file);
     let res = aes128_cbc_decode_pad(&dec, *b"YELLOW SUBMARINE", [0; 16]).unwrap();
     assert_eq!(from_utf8(&res).unwrap(), include_str!("../data/7_result.txt"));
 }
@@ -39,5 +35,5 @@ fn _11() {
 }
 
 fn _12() {
-   let unknown = base64_decode(include_bytes!("../data/12_unknown.txt"));
+   let unknown = base64_decode_filter(include_bytes!("../data/12_unknown.txt"));
 }
