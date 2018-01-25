@@ -17,7 +17,6 @@ pub fn set_1() {
     _3();
     _4();
     _5();
-    println!("hello");
     _6();
     _7();
     _8();
@@ -143,16 +142,16 @@ fn _8() {
         .map(|l| base16_decode_filter(l.as_bytes()))
         .collect();
 
+    let mut dupes = false;
     for enc in &raw {
-        println!("Checking {}...:", from_utf8(&base16_encode(&enc[0..8])).unwrap());
         let analysis = detect_ecb(enc);
-        for (k, v) in analysis {
+        for (_, v) in analysis {
             if v > 1 {
-                println!("  The block {} was repeated {} times.",
-                    from_utf8(&base16_encode(k)).unwrap(), v)
+                dupes = true;
             }
         }
     }
+    assert!(dupes);
 }
 
 fn float_cmp(a: f64, b: f64) -> Ordering {

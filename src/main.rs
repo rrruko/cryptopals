@@ -1,4 +1,5 @@
 #![feature(entry_and_modify)]
+#![feature(inclusive_range_syntax)]
 #![feature(slice_patterns)]
 
 extern crate itertools;
@@ -17,6 +18,6 @@ mod set_1;
 mod set_2;
 
 fn main() {
-   set_1::set_1();
+   //set_1::set_1();
    set_2::set_2();
 }
