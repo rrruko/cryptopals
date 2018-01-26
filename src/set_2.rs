@@ -50,7 +50,7 @@ fn oracle(buffer: &[u8], key: [u8; 16]) -> Vec<u8> {
 fn _12() {
     let key: [u8; 16] = rand::random();
 
-    // detect block size
+    // Detect block size
     let bytes = &[b'A'; 20];
     let mut out_length = None;
     let mut block_size = None;
@@ -69,52 +69,70 @@ fn _12() {
     };
     let block_size = block_size.unwrap();
 
-    // detect that oracle uses ecb
+    // Detect that oracle uses ecb
     let ecb_test = vec![b'A'; block_size * 2];
     let ecb_test_out = oracle(&ecb_test[..], key);
     assert_eq!(
         ecb_test_out[..block_size],
         ecb_test_out[block_size..block_size * 2]);
 
-    //
+    // Break it
     let mut known_bytes = Vec::new();
 
-    for offs in 0..16 {
-        let mut seen = HashMap::new();
-        let mut brute_force = vec![b'A'; block_size];
-        
-        let short = &oracle(&vec![b'A'; block_size - 1 - offs][..], key)[..block_size];
+    'outer: for block_ix in 0.. {
+        for offs in 1..=block_size {
+            let pad_width = block_size - offs;
+            let mut padding = vec![b'A'; pad_width];
 
-        for i in 0..known_bytes.len() {
-            brute_force[block_size - 1 - offs + i] = known_bytes[i];
-        }
-        println!("brute_force[0..block_size-1] is {:?}", &brute_force[0..block_size-1]);
+            // Make a dictionary of possible values for this block.
+            //
+            // here, we only need to pass ONE BLOCK into the oracle.
+            // We just need to make sure the first block_size - 1 bytes of
+            // that block are equal to the first block_size - 1 bytes of the
+            // `actual` block we define later.
+            let mut dictionary = HashMap::new();
+            
+            let mut d = vec![b'A'; block_size];
+            d.extend_from_slice(&known_bytes[..]);
+            let mut dict_padding = Vec::new();
+            let slice_start = block_ix * block_size + offs;
+            dict_padding.extend_from_slice(&d[slice_start..slice_start + block_size - 1]);
+            dict_padding.push(0);
+            println!("{}", from_utf8(&dict_padding).unwrap());
+            println!("pushing oracle({}?) for ? from 0 to 255", 
+                from_utf8(&dict_padding[..block_size-1]).unwrap());
+            for last_byte in 0..=255 {
+                dict_padding[block_size - 1] = last_byte;
+                let this_option = oracle(&dict_padding[..], key);
+                dictionary.insert(last_byte, this_option[..block_size].to_vec());
+            }
 
-        for last_byte in 0..=255 {
-            brute_force[block_size - 1] = last_byte;
-            seen.insert(
-                last_byte, 
-                oracle(&brute_force[..], key)[..block_size].to_vec()
-            );
-        }
-        for (k, v) in seen {
-            if v == short {
-                println!("learned new byte {}", k);
-                known_bytes.push(k);
+            // Get the actual value of the block.
+            //
+            // This will be 
+            let actual = &oracle(&padding[..], key)[
+                block_size * block_ix..
+                block_size * (block_ix + 1)
+            ];
+            println!("actual = oracle({})", from_utf8(&padding[..]).unwrap());
+
+            // Find the dictionary element that matches.
+            let mut matched = false;
+            for (k, v) in dictionary {
+                println!("comparing {} to {}",
+                    from_utf8(&base16_encode(&v[..])).unwrap(),
+                    from_utf8(&base16_encode(&actual[..])).unwrap()
+                );
+                if v == actual {
+                    matched = true;
+                    println!("learned new byte {}", k);
+                    known_bytes.push(k);
+                }
+            }
+            if !matched {
+                break 'outer;
             }
         }
+        println!("{}", from_utf8(&known_bytes[..]).unwrap());
     }
-
-    println!("{}", from_utf8(&known_bytes[..]).unwrap());
-}
-
-fn hell(x: &[u8]) -> Vec<u8> {
-    x.clone().to_vec()
-}
-
-fn wtf() {
-    let a = &[0; 16];
-    let b = hell(a);
-    let c = hell(&b[..]).clone();
-    println!("{:?}", c);
 }
