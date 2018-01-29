@@ -4,6 +4,7 @@
 
 extern crate itertools;
 extern crate nalgebra as na;
+extern crate nom;
 extern crate rand;
 
 mod aes;

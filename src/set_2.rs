@@ -4,14 +4,22 @@ use oracle::*;
 use pkcs::*;
 use rand;
 
+use nom::*;
+use nom::IResult::*;
+use nom::Needed::Size;
+
 use std::collections::HashMap;
 use std::str::from_utf8;
+use std::io::Write;
 
 pub fn set_2() {
+    /*
     _9();
     _10();
     _11();
+    */
     _12();
+    _13();
 }
 
 fn _9() {
@@ -47,36 +55,33 @@ fn oracle(buffer: &[u8], key: [u8; 16]) -> Vec<u8> {
     }
 }
 
-fn _12() {
-    let key: [u8; 16] = rand::random();
+type Oracle = Fn(&[u8]) -> Vec<u8>;
 
-    // Detect block size
-    let bytes = &[b'A'; 20];
+fn ecb_block_size(ora: &Oracle) -> usize {
+    let bytes = &[b'A'; 255];
     let mut out_length = None;
     let mut block_size = None;
-    for i in 1..20 {
-        let enc = &oracle(&bytes[..i], key);
+    for i in 1..=255 {
+        let enc = ora(&bytes[..i]);
         match out_length {
-            None    => {
-                out_length = Some(enc.len());
-            },
             Some(l) if enc.len() > l => {
                 block_size = Some(enc.len() - l);
                 break;
-            },
-            _ => { }
+            }
+            Some(l) => { },
+            None => { out_length = Some(enc.len()); }
         }
-    };
-    let block_size = block_size.unwrap();
+    }
+    block_size.unwrap()
+}
 
-    // Detect that oracle uses ecb
+fn is_ecb(ora: &Oracle, block_size: usize) -> bool {
     let ecb_test = vec![b'A'; block_size * 2];
-    let ecb_test_out = oracle(&ecb_test[..], key);
-    assert_eq!(
-        ecb_test_out[..block_size],
-        ecb_test_out[block_size..block_size * 2]);
+    let ecb_test_out = ora(&ecb_test[..]);
+    ecb_test_out[..block_size] == ecb_test_out[block_size..block_size * 2]
+}
 
-    // Break it
+fn break_ecb_with_oracle(ora: &Oracle, block_size: usize) -> Vec<u8> {
     let mut known_bytes = Vec::new();
 
     'outer: for block_ix in 0.. {
@@ -84,55 +89,130 @@ fn _12() {
             let pad_width = block_size - offs;
             let mut padding = vec![b'A'; pad_width];
 
+            // Get the actual value of the block.
+            let actual = &ora(&padding[..])[
+                block_size * block_ix..
+                block_size * (block_ix + 1)
+            ];
+
             // Make a dictionary of possible values for this block.
             //
             // here, we only need to pass ONE BLOCK into the oracle.
             // We just need to make sure the first block_size - 1 bytes of
             // that block are equal to the first block_size - 1 bytes of the
-            // `actual` block we define later.
-            let mut dictionary = HashMap::new();
-            
+            // plaintext of the `actual` block.
             let mut d = vec![b'A'; block_size];
             d.extend_from_slice(&known_bytes[..]);
             let mut dict_padding = Vec::new();
             let slice_start = block_ix * block_size + offs;
             dict_padding.extend_from_slice(&d[slice_start..slice_start + block_size - 1]);
             dict_padding.push(0);
-            println!("{}", from_utf8(&dict_padding).unwrap());
-            println!("pushing oracle({}?) for ? from 0 to 255", 
-                from_utf8(&dict_padding[..block_size-1]).unwrap());
+            let mut matched = false;
             for last_byte in 0..=255 {
                 dict_padding[block_size - 1] = last_byte;
-                let this_option = oracle(&dict_padding[..], key);
-                dictionary.insert(last_byte, this_option[..block_size].to_vec());
-            }
-
-            // Get the actual value of the block.
-            //
-            // This will be 
-            let actual = &oracle(&padding[..], key)[
-                block_size * block_ix..
-                block_size * (block_ix + 1)
-            ];
-            println!("actual = oracle({})", from_utf8(&padding[..]).unwrap());
-
-            // Find the dictionary element that matches.
-            let mut matched = false;
-            for (k, v) in dictionary {
-                println!("comparing {} to {}",
-                    from_utf8(&base16_encode(&v[..])).unwrap(),
-                    from_utf8(&base16_encode(&actual[..])).unwrap()
-                );
-                if v == actual {
+                let this_option = ora(&dict_padding[..]);
+                if &this_option[..block_size] == actual {
                     matched = true;
-                    println!("learned new byte {}", k);
-                    known_bytes.push(k);
+                    print!("{}", char::from(last_byte));
+                    ::std::io::stdout().flush();
+                    known_bytes.push(last_byte);
+                    break;
                 }
             }
             if !matched {
                 break 'outer;
             }
         }
-        println!("{}", from_utf8(&known_bytes[..]).unwrap());
     }
+    known_bytes
+}
+
+fn _12() {
+    // Get block size
+    let key: [u8; 16] = rand::random();
+
+    let unknown = base64_decode_filter(
+        include_bytes!("../data/12.txt"));
+
+    let ora: &Oracle = &(move |buffer| {
+        let mut v = Vec::new();
+        v.extend_from_slice(buffer);
+        v.extend_from_slice(&unknown[..]);
+        {
+            aes128_ecb_encode_pad(&v[..], key)
+        }
+    });
+    let block_size = ecb_block_size(ora);
+
+    // Detect that oracle uses ecb
+    assert!(is_ecb(ora, block_size));
+
+    // Break it
+    let answer = break_ecb_with_oracle(ora, block_size);
+    println!("{}", from_utf8(&answer[..]).unwrap());
+}
+
+type KVVec<'a, 'b> = Vec<(&'a [u8], &'b [u8])>;
+
+named!(key,
+    take_until_and_consume!(&b"="[..]));
+named!(value,
+    take_until_and_consume!(&b"&"[..]));
+named!(kvpair< (&[u8], &[u8]) >,
+    tuple!(key, value));
+named!(kvs<KVVec>, many0!(kvpair));
+
+fn sanitize(bytes: &[u8]) -> Vec<u8> {
+    bytes.iter()
+        .cloned()
+        .filter(|&ch| ch != b'=' && ch != b'&')
+        .collect()
+}
+
+fn mk_profile(email: &[u8]) -> HashMap<&[u8], &[u8]> {
+    let mut h = HashMap::new();
+    h.insert(&b"email"[..], &email[..]);
+    h.insert(&b"uid"[..],   &b"10"[..]);
+    h.insert(&b"role"[..],  &b"user"[..]);
+    h
+}
+
+fn url_encode(kvs: HashMap<&[u8], &[u8]>) -> Vec<u8> {
+    let mut out = Vec::new();
+    for (k, v) in kvs {
+        out.extend_from_slice(k);
+        out.push(b'=');
+        out.extend_from_slice(v);
+        out.push(b'&');
+    }
+    out.pop();
+    out
+}
+
+fn mk_encrypted_url_profile(email: &[u8], key: [u8; 16]) -> Vec<u8> {
+    let obj = mk_profile(email);
+    let url = url_encode(obj);
+    aes128_ecb_encode_pad(&url[..], key)
+}
+
+fn _13() {
+    let input = b"foo=bar&baz=qux&zap=zazzle&";
+    let email = sanitize(b"ruk=&o@gmail.com&");
+    let emailEnc =
+        [(&b"email"[..], &b"ruko@gmail.com"[..]),
+         (&b"uid"[..],   &b"10"[..]),
+         (&b"role"[..],  &b"user"[..])].iter().cloned().collect();
+    assert_eq!(
+        mk_profile(&email[..]),
+        emailEnc
+    );
+    match kvs(input) {
+        Done(i, o)          => println!("{:?}", o),
+        Error(_)            => println!(":("),
+        Incomplete(Size(n)) => println!(":( {}", n),
+        Incomplete(_)       => println!("incomplete"),
+        _                   => println!("WOAH")
+    };
+    let key = rand::random();
+    mk_encrypted_url_profile(b"ruko@gmail.com", key);
 }

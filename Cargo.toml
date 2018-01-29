@@ -6,4 +6,5 @@ authors = ["ruko <rukokarasu@gmail.com>"]
 [dependencies]
 itertools = "0.7.2"
 nalgebra  = "0.13.1"
+nom = "3.2.1"
 rand = "0.4"
