@@ -48,9 +48,7 @@ pub fn base64_encode(data: &[u8]) -> Vec<u8> {
     for triplet in data.chunks(3) {
         let mut out = [61; 4];
         let mut triplet_buf = [0; 3];
-        for i in 0..triplet.len() {
-            triplet_buf[i] = triplet[i];
-        }
+        triplet_buf[..triplet.len()].copy_from_slice(&triplet[..]);
         let bits =
             triplet_buf[0] as usize * 256 * 256 +
             triplet_buf[1] as usize * 256 +

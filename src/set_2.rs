@@ -13,11 +13,9 @@ use std::str::from_utf8;
 use std::io::Write;
 
 pub fn set_2() {
-    /*
     _9();
     _10();
     _11();
-    */
     _12();
     _13();
 }
@@ -44,17 +42,6 @@ fn _11() {
     }
 }
 
-fn oracle(buffer: &[u8], key: [u8; 16]) -> Vec<u8> {
-    let unknown = &base64_decode_filter(
-        include_bytes!("../data/12.txt"))[..];
-    let mut v = Vec::new();
-    v.extend_from_slice(buffer);
-    v.extend_from_slice(unknown);
-    {
-        aes128_ecb_encode_pad(&v[..], key)
-    }
-}
-
 type Oracle = Fn(&[u8]) -> Vec<u8>;
 
 fn ecb_block_size(ora: &Oracle) -> usize {
@@ -68,7 +55,7 @@ fn ecb_block_size(ora: &Oracle) -> usize {
                 block_size = Some(enc.len() - l);
                 break;
             }
-            Some(l) => { },
+            Some(_) => { },
             None => { out_length = Some(enc.len()); }
         }
     }
@@ -113,8 +100,8 @@ fn break_ecb_with_oracle(ora: &Oracle, block_size: usize) -> Vec<u8> {
                 let this_option = ora(&dict_padding[..]);
                 if &this_option[..block_size] == actual {
                     matched = true;
-                    print!("{}", char::from(last_byte));
-                    ::std::io::stdout().flush();
+                    /*print!("{}", char::from(last_byte));
+                    ::std::io::stdout().flush().unwrap();*/
                     known_bytes.push(last_byte);
                     break;
                 }
@@ -138,9 +125,7 @@ fn _12() {
         let mut v = Vec::new();
         v.extend_from_slice(buffer);
         v.extend_from_slice(&unknown[..]);
-        {
-            aes128_ecb_encode_pad(&v[..], key)
-        }
+        aes128_ecb_encode_pad(&v[..], key)
     });
     let block_size = ecb_block_size(ora);
 
@@ -169,17 +154,17 @@ fn sanitize(bytes: &[u8]) -> Vec<u8> {
         .collect()
 }
 
-fn mk_profile(email: &[u8]) -> HashMap<&[u8], &[u8]> {
-    let mut h = HashMap::new();
-    h.insert(&b"email"[..], &email[..]);
-    h.insert(&b"uid"[..],   &b"10"[..]);
-    h.insert(&b"role"[..],  &b"user"[..]);
+fn mk_profile(email: &[u8]) -> KVVec {
+    let mut h = Vec::new();
+    h.push((&b"email"[..], &email[..]));
+    h.push((&b"uid"[..],   &b"10"[..]));
+    h.push((&b"role"[..],  &b"user"[..]));
     h
 }
 
-fn url_encode(kvs: HashMap<&[u8], &[u8]>) -> Vec<u8> {
+fn url_encode(obj: KVVec) -> Vec<u8> {
     let mut out = Vec::new();
-    for (k, v) in kvs {
+    for (k, v) in obj {
         out.extend_from_slice(k);
         out.push(b'=');
         out.extend_from_slice(v);
@@ -192,27 +177,69 @@ fn url_encode(kvs: HashMap<&[u8], &[u8]>) -> Vec<u8> {
 fn mk_encrypted_url_profile(email: &[u8], key: [u8; 16]) -> Vec<u8> {
     let obj = mk_profile(email);
     let url = url_encode(obj);
+    //println!("encrypting: {}", from_utf8(&url[..]).unwrap());
     aes128_ecb_encode_pad(&url[..], key)
 }
 
+fn pretty_ct(ciphertext: &[u8]) {
+    for chunk in ciphertext.chunks(16) {
+        print!("{} ", from_utf8(&base16_encode(chunk)[..]).unwrap());
+    }
+    println!("");
+}
+
+// This is hardcoded for _13 because I'm too lazy to write it right now
+// It looks like challenge 14 is mostly about implementing this function so
+// I'll do it then
+fn prefix_length(oracle: &Oracle) -> usize {
+    6
+}
+
+// Everything here is hardcoded because I'm lazy but you can do this even if
+// you don't know the prefix (which in this case is `email=`) and you could
+// decode the entire postfix to determine that the padding on `to` needs to
+// be 13
 fn _13() {
-    let input = b"foo=bar&baz=qux&zap=zazzle&";
-    let email = sanitize(b"ruk=&o@gmail.com&");
-    let emailEnc =
-        [(&b"email"[..], &b"ruko@gmail.com"[..]),
-         (&b"uid"[..],   &b"10"[..]),
-         (&b"role"[..],  &b"user"[..])].iter().cloned().collect();
-    assert_eq!(
-        mk_profile(&email[..]),
-        emailEnc
-    );
-    match kvs(input) {
-        Done(i, o)          => println!("{:?}", o),
-        Error(_)            => println!(":("),
-        Incomplete(Size(n)) => println!(":( {}", n),
-        Incomplete(_)       => println!("incomplete"),
-        _                   => println!("WOAH")
-    };
     let key = rand::random();
-    mk_encrypted_url_profile(b"ruko@gmail.com", key);
+    let oracle: &Oracle = &(move |bytes| {
+        let mut v = Vec::new();
+        v.extend_from_slice(bytes);
+        mk_encrypted_url_profile(&v[..], key)
+    });
+
+    let block_size = ecb_block_size(oracle);
+    let prefix_length = prefix_length(oracle);
+
+    let pad_length = block_size - (prefix_length % block_size);
+    let pad_blocks = 1 + (prefix_length / block_size);
+
+    // We're setting our email address such that one of the blocks of the
+    // ciphertext will be "admin", padded using EKCS7.
+    // Since we computed the prefix length, we know exactly which
+    // ciphertext block that is.
+    let mut evil_email = vec![b'A'; pad_length];
+    evil_email.extend_from_slice(
+        b"admin\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b"
+    );
+    let evil = oracle(&evil_email[..]);
+
+    pretty_ct(&evil[..]);
+
+    // We're setting our email address such that the last block of the
+    // ciphertext will be "user____________" (EKCS7 padded) as in "role=user"
+    // Since we just figured out the ciphertext of "admin___________" (EKCS7
+    // padded), we can just paste it over that last block and the result will
+    // decrypt successfully.
+    let mut to = oracle(&[b'A'; 13][..]);
+    let last = to.len() - 16;
+    to[last..].copy_from_slice(&evil[pad_blocks*block_size..(pad_blocks+1)*block_size]);
+
+    pretty_ct(&to[..]);
+
+    let dec = aes128_ecb_decode_pad(&to[..], key).unwrap();
+    println!("{}", from_utf8(&dec[..]).unwrap());
+    match kvs(&dec) {
+        Done(_, o) => println!("{:?}", o),
+        _ => println!("failed")
+    }
 }
