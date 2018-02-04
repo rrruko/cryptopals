@@ -13,11 +13,12 @@ use std::str::from_utf8;
 use std::io::Write;
 
 pub fn set_2() {
-    _9();
+    /*_9();
     _10();
     _11();
     _12();
-    _13();
+    _13();*/
+    _14();
 }
 
 fn _9() {
@@ -68,10 +69,10 @@ fn is_ecb(ora: &Oracle, block_size: usize) -> bool {
     ecb_test_out[..block_size] == ecb_test_out[block_size..block_size * 2]
 }
 
-fn break_ecb_with_oracle(ora: &Oracle, block_size: usize) -> Vec<u8> {
+fn break_ecb_with_oracle(ora: &Oracle, block_size: usize, start_block: usize) -> Vec<u8> {
     let mut known_bytes = Vec::new();
 
-    'outer: for block_ix in 0.. {
+    'outer: for block_ix in start_block.. {
         for offs in 1..=block_size {
             let pad_width = block_size - offs;
             let mut padding = vec![b'A'; pad_width];
@@ -100,8 +101,6 @@ fn break_ecb_with_oracle(ora: &Oracle, block_size: usize) -> Vec<u8> {
                 let this_option = ora(&dict_padding[..]);
                 if &this_option[..block_size] == actual {
                     matched = true;
-                    /*print!("{}", char::from(last_byte));
-                    ::std::io::stdout().flush().unwrap();*/
                     known_bytes.push(last_byte);
                     break;
                 }
@@ -133,7 +132,7 @@ fn _12() {
     assert!(is_ecb(ora, block_size));
 
     // Break it
-    let answer = break_ecb_with_oracle(ora, block_size);
+    let answer = break_ecb_with_oracle(ora, block_size, 0); 
     println!("{}", from_utf8(&answer[..]).unwrap());
 }
 
@@ -241,5 +240,124 @@ fn _13() {
     match kvs(&dec) {
         Done(_, o) => println!("{:?}", o),
         _ => println!("failed")
+    }
+}
+
+// Return the first block that matches the next one, and its position in units
+// of block_size.
+fn adj_blocks_match(known_pt: &[u8], block_size: usize, oracle: &Oracle) -> Option<(usize, Vec<u8>)> {
+    let mut match_exists = false;
+    let mut bytes = oracle(known_pt);
+    let block_count = bytes.len() / block_size;
+    for i in 0..block_count-1 {
+        let first = &bytes[block_size*i..block_size*(i+1)];
+        let second = &bytes[block_size*(i+1)..block_size*(i+2)];
+        if  first == second {
+            return Some((i, first.to_vec()));
+        }
+    }
+    None
+}
+
+fn _14() {
+    let key = rand::random();
+    let prefix_length: u8 = rand::random();
+    let mut prefix = Vec::new();
+    for i in 0..prefix_length {
+        prefix.push(rand::random());
+    }
+    let unknown = base64_decode_filter(
+        include_bytes!("../data/12.txt"));
+    let oracle: &Oracle = &(move |bytes| {
+        let mut v = Vec::new();
+        v.extend_from_slice(&prefix[..]);
+        v.extend_from_slice(bytes);
+        v.extend_from_slice(&unknown[..]);
+        aes128_ecb_encode_pad(&v[..], key)
+    });
+    
+    // Let's figure out how long the prefix is.
+    //
+    // To do that, we first need to determine the block size
+    let block_size = ecb_block_size(oracle); // FIXME
+    
+    // Passing this into the oracle is guaranteed to result in two adjacent
+    // matching blocks, so we can safely unwrap.
+    let mut prefix_test = vec![b'A'; block_size*3];
+    let res = adj_blocks_match(&prefix_test[..], block_size, oracle).unwrap();
+    let ix = res.0;
+    let to_match = res.1;
+    println!("{}", from_utf8(&base16_encode(&to_match[..])[..]).unwrap());
+
+    // (To be safe, we should repeat prefix_test with vec![b'B'; block_size*3]
+    // which will let us confirm where our injected text is going in case
+    // the prefix or the plaintext results in false positives.
+    // For instance, there's a chance that the prefix contains matching
+    // adjacent blocks, or that the last fractional block of prefix text is
+    // all b'A'.)
+
+    // Let's remove elements until we stop having two adjacent matching blocks
+    // We gotta be careful here because adj_blocks_match might find a match
+    // due to the actual unknown plaintext, but we only want to find matches
+    // due to the attacker-supplied plaintext.
+    while Some(&to_match) == adj_blocks_match(&prefix_test[..], block_size, oracle).map(|x| x.1).as_ref() {
+        prefix_test.pop();
+    }
+    let n = prefix_test.len() + 1;
+
+    // We want to always pad with this many bytes no matter what
+    // so that the rest is block-aligned.
+    let prefix_pad = n % block_size;
+
+    // So n is the shortest length of a string of As that gives matching
+    // blocks, and ix is the block number of the first block that matches
+    // its neighbor.
+    let guessed_prefix = ix * block_size - prefix_pad;
+
+    let mut known_bytes = Vec::new();
+    'outer: for block_ix in ix.. {
+        for offs in 1..=block_size {
+            let pad_width = block_size - offs;
+            let mut padding = vec![b'A'; prefix_pad + pad_width];
+
+            // We want to only look at the blocks that come after the prefix
+            // string!
+            let actual = &oracle(&padding[..])[
+                block_size * block_ix..
+                block_size * (block_ix + 1)
+            ];
+
+            // set dict_padding to the last block_size-1 of known_bytes
+            // and then push a 0.
+            // if we don't have block_size-1 of known bytes yet, prepend b'A'
+            // as necessary.
+
+            let mut dict_padding = {
+                let mut d = vec![b'A'; block_size];
+                d.extend_from_slice(&known_bytes[..]);
+                let mut dict_padding = vec![b'A'; prefix_pad];
+                let slice_start = (block_ix-ix) * block_size + offs;
+                // ?
+                dict_padding.extend_from_slice(&d[slice_start..slice_start + block_size - 1]);
+                // ?
+                dict_padding.push(0);
+                dict_padding
+            };
+
+            let mut matched = false;
+            for last_byte in 0..=255 {
+                dict_padding[block_size - 1] = last_byte;
+                let this_option = &oracle(&dict_padding[..])[ix*block_size..ix*(block_size+1)];
+                if this_option == actual {
+                    matched = true;
+                    print!("{}", char::from(last_byte));
+                    known_bytes.push(last_byte);
+                    break;
+                }
+            }
+            if !matched {
+                break;
+            }
+        }
     }
 }
