@@ -24,7 +24,7 @@ pub fn set_2() {
 
 fn _9() {
     let x = b"YELLOW SUBMARINE";
-    assert_eq!(b"YELLOW SUBMARINE\x04\x04\x04\x04", &pkcs7(x, 20).unwrap()[..]);
+    assert_eq!(b"YELLOW SUBMARINE\x04\x04\x04\x04"[..], pkcs7(x, 20).unwrap()[..]);
 }
 
 fn _10() {
@@ -40,7 +40,7 @@ fn _11() {
     let plaintext = include_bytes!("../data/7_result.txt");
     for _ in 0..10 {
         let (mystery, mode) = random_encrypt(plaintext);
-        assert_eq!(ecb_cbc_oracle(&mystery[..]), mode);
+        assert_eq!(ecb_cbc_oracle(&mystery), mode);
     }
 }
 
@@ -66,7 +66,7 @@ fn ecb_block_size(ora: &Oracle) -> usize {
 
 fn is_ecb(ora: &Oracle, block_size: usize) -> bool {
     let ecb_test = vec![b'A'; block_size * 2];
-    let ecb_test_out = ora(&ecb_test[..]);
+    let ecb_test_out = ora(&ecb_test);
     ecb_test_out[..block_size] == ecb_test_out[block_size..block_size * 2]
 }
 
@@ -77,7 +77,7 @@ fn bytes_by_english_freq() -> Vec<u8> {
     freq.extend_from_slice(b"0123456789");
     freq.extend_from_slice(b"\n.,!?-'\"/");
     freq.extend_from_slice(b"ETAOINSHRDLCUMWFGYPBVKJXQZ");
-    freq.extend_from_slice(&(0u8..=255).collect::<Vec<u8>>()[..]);
+    freq.extend_from_slice(&(0u8..=255).collect::<Vec<u8>>());
     freq
 }
 
@@ -109,7 +109,7 @@ fn break_ecb_with_oracle(ora: &Oracle, block_size: usize, prefix_length: usize) 
             let mut padding = vec![b'A'; pad_width + const_pad];
 
             // Get the actual value of the block.
-            let actual = &ora(&padding[..])[
+            let actual = &ora(&padding)[
                 block_size * block_ix..
                 block_size * (block_ix + 1)
             ];
@@ -121,7 +121,7 @@ fn break_ecb_with_oracle(ora: &Oracle, block_size: usize, prefix_length: usize) 
             // that block are equal to the first block_size - 1 bytes of the
             // plaintext of the `actual` block.
             let mut d = vec![b'A'; block_size];
-            d.extend_from_slice(&known_bytes[..]);
+            d.extend_from_slice(&known_bytes);
             let mut dict_padding = vec![b'A'; const_pad];
             let slice_start = known_bytes.len() + 1;
             dict_padding.extend_from_slice(&d[slice_start..slice_start + block_size - 1]);
@@ -133,7 +133,7 @@ fn break_ecb_with_oracle(ora: &Oracle, block_size: usize, prefix_length: usize) 
             let mut matched = false;
             for last_byte in freq.iter() {
                 dict_padding[const_pad + block_size - 1] = *last_byte;
-                let this_option = &ora(&dict_padding[..])[
+                let this_option = &ora(&dict_padding)[
                     block_size * start_block..
                     block_size * (start_block + 1)
                 ];
@@ -162,8 +162,8 @@ fn _12() {
     let ora: &Oracle = &(move |buffer| {
         let mut v = Vec::new();
         v.extend_from_slice(buffer);
-        v.extend_from_slice(&unknown[..]);
-        aes128_ecb_encode_pad(&v[..], key)
+        v.extend_from_slice(&unknown);
+        aes128_ecb_encode_pad(&v, key)
     });
     let block_size = ecb_block_size(ora);
 
@@ -172,15 +172,15 @@ fn _12() {
 
     // Break it
     let answer = break_ecb_with_oracle(ora, block_size, 0);
-    println!("{}", from_utf8(&answer[..]).unwrap());
+    println!("{}", from_utf8(&answer).unwrap());
 }
 
 type KVVec<'a, 'b> = Vec<(&'a [u8], &'b [u8])>;
 
 named!(key,
-    take_until_and_consume!(&b"="[..]));
+    take_until_and_consume!("="));
 named!(value,
-    take_until_and_consume!(&b"&"[..]));
+    take_until_and_consume!("&"));
 named!(kvpair< (&[u8], &[u8]) >,
     tuple!(key, value));
 named!(kvs<KVVec>, many0!(kvpair));
@@ -193,10 +193,10 @@ fn sanitize(bytes: &[u8]) -> Vec<u8> {
 }
 
 fn mk_profile(email: &[u8]) -> KVVec {
-    let mut h = Vec::new();
-    h.push((&b"email"[..], &email[..]));
-    h.push((&b"uid"[..],   &b"10"[..]));
-    h.push((&b"role"[..],  &b"user"[..]));
+    let mut h: KVVec = Vec::new();
+    h.push((b"email", email));
+    h.push((b"uid",   b"10"));
+    h.push((b"role",  b"user"));
     h
 }
 
@@ -215,12 +215,12 @@ fn url_encode(obj: KVVec) -> Vec<u8> {
 fn mk_encrypted_url_profile(email: &[u8], key: [u8; 16]) -> Vec<u8> {
     let obj = mk_profile(email);
     let url = url_encode(obj);
-    aes128_ecb_encode_pad(&url[..], key)
+    aes128_ecb_encode_pad(&url, key)
 }
 
 fn pretty_ct(ciphertext: &[u8]) {
     for chunk in ciphertext.chunks(16) {
-        print!("{} ", from_utf8(&base16_encode(chunk)[..]).unwrap());
+        print!("{} ", from_utf8(&base16_encode(chunk)).unwrap());
     }
     println!("");
 }
@@ -234,7 +234,7 @@ fn _13() {
     let oracle: &Oracle = &(move |bytes| {
         let mut v = Vec::new();
         v.extend_from_slice(bytes);
-        mk_encrypted_url_profile(&v[..], key)
+        mk_encrypted_url_profile(&v, key)
     });
 
     let block_size = ecb_block_size(oracle);
@@ -251,9 +251,9 @@ fn _13() {
     evil_email.extend_from_slice(
         b"admin\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b"
     );
-    let evil = oracle(&evil_email[..]);
+    let evil = oracle(&evil_email);
 
-    pretty_ct(&evil[..]);
+    pretty_ct(&evil);
 
     // We're setting our email address such that the last block of the
     // ciphertext will be "user____________" (EKCS7 padded) as in "role=user"
@@ -262,12 +262,17 @@ fn _13() {
     // decrypt successfully.
     let mut to = oracle(&[b'A'; 13][..]);
     let last = to.len() - 16;
-    to[last..].copy_from_slice(&evil[pad_blocks*block_size..(pad_blocks+1)*block_size]);
+    to[last..].copy_from_slice(
+        &evil[
+            pad_blocks      * block_size..
+            (pad_blocks + 1)* block_size
+        ]
+    );
 
-    pretty_ct(&to[..]);
+    pretty_ct(&to);
 
-    let dec = aes128_ecb_decode_pad(&to[..], key).unwrap();
-    println!("{}", from_utf8(&dec[..]).unwrap());
+    let dec = aes128_ecb_decode_pad(&to, key).unwrap();
+    println!("{}", from_utf8(&dec).unwrap());
     match kvs(&dec) {
         Done(_, o) => println!("{:?}", o),
         _ => println!("failed")
@@ -281,8 +286,8 @@ fn adj_blocks_match(known_pt: &[u8], block_size: usize, oracle: &Oracle) -> Opti
     let mut bytes = oracle(known_pt);
     let block_count = bytes.len() / block_size;
     for i in 0..block_count-1 {
-        let first = &bytes[block_size*i..block_size*(i+1)];
-        let second = &bytes[block_size*(i+1)..block_size*(i+2)];
+        let first  = &bytes[block_size * i      ..block_size * (i + 1)];
+        let second = &bytes[block_size * (i + 1)..block_size * (i + 2)];
         if  first == second {
             return Some((i, first.to_vec()));
         }
@@ -294,7 +299,7 @@ fn guess_prefix_length(oracle: &Oracle, block_size: usize) -> usize {
     // Passing this into the oracle is guaranteed to result in two adjacent
     // matching blocks, so we can safely unwrap.
     let mut prefix_test = vec![b'A'; block_size*3];
-    let res = adj_blocks_match(&prefix_test[..], block_size, oracle).unwrap();
+    let res = adj_blocks_match(&prefix_test, block_size, oracle).unwrap();
     let ix = res.0;
     let to_match = res.1;
 
@@ -309,7 +314,7 @@ fn guess_prefix_length(oracle: &Oracle, block_size: usize) -> usize {
     // We gotta be careful here because adj_blocks_match might find a match
     // due to the actual unknown plaintext, but we only want to find matches
     // due to the attacker-supplied plaintext.
-    while Some(&to_match) == adj_blocks_match(&prefix_test[..], block_size, oracle).map(|x| x.1).as_ref() {
+    while Some(&to_match) == adj_blocks_match(&prefix_test, block_size, oracle).map(|x| x.1).as_ref() {
         prefix_test.pop();
     }
     let n = prefix_test.len() + 1;
@@ -336,10 +341,10 @@ fn _14() {
         include_bytes!("../data/12.txt"));
     let oracle: &Oracle = &(move |bytes| {
         let mut v = Vec::new();
-        v.extend_from_slice(&prefix[..]);
+        v.extend_from_slice(&prefix);
         v.extend_from_slice(bytes);
-        v.extend_from_slice(&unknown[..]);
-        aes128_ecb_encode_pad(&v[..], key)
+        v.extend_from_slice(&unknown);
+        aes128_ecb_encode_pad(&v, key)
     });
 
     // Let's figure out how long the prefix is.
@@ -350,7 +355,7 @@ fn _14() {
     // Knowing the prefix length, we can break it much like we would break
     // a similar oracle with no prefix.
     let res = break_ecb_with_oracle(oracle, block_size, length);
-    let unpad_res = undo_pkcs7(&res[..]);
+    let unpad_res = undo_pkcs7(&res);
 
     assert_eq!(&include_bytes!("../data/rollin.txt")[..], &unpad_res[..]);
 }
@@ -361,3 +366,38 @@ fn _15() {
     assert!(undo_pkcs7_checked(b"ICE ICE BABY\x05\x05\x05\x05").is_none());
     assert!(undo_pkcs7_checked(b"ICE ICE BABY\x01\x02\x03\x04").is_none());
 }
+
+/*
+
+    0000100000100001 <- 0 is \x00 and 1 is \x01
+xor AAAA:admin<true: <- : and < are legal
+--------------------
+    AAAA;admin=true;
+
+oracle pt:
+    comment1=cooking    prefix
+    %20MCs;userdata=    prefix
+    [   whatever   ] <- insert
+    AAAA:admin<true: <- insert
+    ;comment2=%20lik    postfix
+    e%20a%20pound%20    postfix
+    of%20bacon______    postfix
+->
+oracle ct:
+    [ct block 1]
+    [ct block 2]
+    [ct block 3] <- flip the lowest bit in these bytes ____X_____X____X
+    [ct block 4] <- which will result in the corresponding bits in this block
+    [ct block 5]        being flipped after decryption (and scramble block 3)
+    [ct block 6]
+    [ct block 7]
+->
+decrypted:
+    comment1=cooking
+    %20MCs;userdata=
+    ????????????????
+    AAAA;admin=true; <- omg!!!
+    ;comment2=%20lik
+    e%20a%20pound%20
+    of%20bacon______
+*/
