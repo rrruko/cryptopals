@@ -17,7 +17,7 @@ pub fn set_2() {
     _10();
     _11();
     //_12();
-    //_13();
+    _13();
     _14();
 }
 
@@ -69,22 +69,34 @@ fn is_ecb(ora: &Oracle, block_size: usize) -> bool {
     ecb_test_out[..block_size] == ecb_test_out[block_size..block_size * 2]
 }
 
-
-fn break_ecb_with_oracle(
-    ora: &Oracle,
-    block_size: usize,
-    start_block: usize,
-    const_pad: usize) -> Vec<u8> {
-
-    // Iterating last_byte over freq is a little faster than iterating over
-    // 0..=255, but it's not necessary.
-    let mut freq: Vec<u8> = Vec::new();
+fn bytes_by_english_freq() -> Vec<u8> {
+    let mut freq = Vec::new();
     freq.extend_from_slice(b" ");
     freq.extend_from_slice(b"etaoinshrdlcumwfgypbvkjxqz");
     freq.extend_from_slice(b"0123456789");
     freq.extend_from_slice(b"\n.,!?-'\"/");
     freq.extend_from_slice(b"ETAOINSHRDLCUMWFGYPBVKJXQZ");
+    freq.extend_from_slice(&(0u8..=255).collect::<Vec<u8>>()[..]);
+    freq
+}
 
+// This needs some work.
+// prefix_length is the string ora prepends to its input (possibly 0).
+// If it's 0, this works out to always pad with 16 bytes, though that's
+// unnecessary.
+// Otherwise, start_block gets the index of the first block of text we
+// have full control over.
+fn break_ecb_with_oracle(ora: &Oracle, block_size: usize, prefix_length: usize) -> Vec<u8> {
+    // We want to always pad with this many bytes no matter what
+    // so that the rest is block-aligned.
+    let const_pad = block_size - (prefix_length % block_size);
+    
+    let start_block = prefix_length / block_size + 1;
+
+    // Iterating last_byte over freq is a little faster than iterating over
+    // 0..=255, but it's not necessary.
+    let mut freq: Vec<u8> = bytes_by_english_freq();
+    
     let mut known_bytes = Vec::new();
 
     // We want to look at each block of the unknown plaintext in turn!
@@ -117,9 +129,6 @@ fn break_ecb_with_oracle(
             assert_eq!(dict_padding[..const_pad], b"AAAAAAAAAAAAAAAA"[..const_pad]);
             assert_eq!(dict_padding.len() - const_pad, block_size);
 
-            /*println!("Comparing (pad={})", const_pad);
-            println!("    block {} of ora({:?}) to", block_ix,    padding);
-            println!("    block {} of ora({:?}).",   start_block, dict_padding);*/
             let mut matched = false;
             for last_byte in freq.iter() {
                 dict_padding[const_pad + block_size - 1] = *last_byte;
@@ -130,7 +139,6 @@ fn break_ecb_with_oracle(
                 assert_eq!(this_option.len(), actual.len());
                 if this_option == actual {
                     matched = true;
-                    println!("{}", char::from(*last_byte));
                     known_bytes.push(*last_byte);
                     break;
                 }
@@ -162,7 +170,7 @@ fn _12() {
     assert!(is_ecb(ora, block_size));
 
     // Break it
-    let answer = break_ecb_with_oracle(ora, block_size, 0, 0);
+    let answer = break_ecb_with_oracle(ora, block_size, 0);
     println!("{}", from_utf8(&answer[..]).unwrap());
 }
 
@@ -206,7 +214,6 @@ fn url_encode(obj: KVVec) -> Vec<u8> {
 fn mk_encrypted_url_profile(email: &[u8], key: [u8; 16]) -> Vec<u8> {
     let obj = mk_profile(email);
     let url = url_encode(obj);
-    //println!("encrypting: {}", from_utf8(&url[..]).unwrap());
     aes128_ecb_encode_pad(&url[..], key)
 }
 
@@ -215,13 +222,6 @@ fn pretty_ct(ciphertext: &[u8]) {
         print!("{} ", from_utf8(&base16_encode(chunk)[..]).unwrap());
     }
     println!("");
-}
-
-// This is hardcoded for _13 because I'm too lazy to write it right now
-// It looks like challenge 14 is mostly about implementing this function so
-// I'll do it then
-fn prefix_length(oracle: &Oracle) -> usize {
-    6
 }
 
 // Everything here is hardcoded because I'm lazy but you can do this even if
@@ -237,7 +237,7 @@ fn _13() {
     });
 
     let block_size = ecb_block_size(oracle);
-    let prefix_length = prefix_length(oracle);
+    let prefix_length = guess_prefix_length(oracle, block_size);
 
     let pad_length = block_size - (prefix_length % block_size);
     let pad_blocks = 1 + (prefix_length / block_size);
@@ -289,7 +289,7 @@ fn adj_blocks_match(known_pt: &[u8], block_size: usize, oracle: &Oracle) -> Opti
     None
 }
 
-fn prefix_length_14(oracle: &Oracle, block_size: usize) -> usize {
+fn guess_prefix_length(oracle: &Oracle, block_size: usize) -> usize {
     // Passing this into the oracle is guaranteed to result in two adjacent
     // matching blocks, so we can safely unwrap.
     let mut prefix_test = vec![b'A'; block_size*3];
@@ -308,18 +308,23 @@ fn prefix_length_14(oracle: &Oracle, block_size: usize) -> usize {
     // We gotta be careful here because adj_blocks_match might find a match
     // due to the actual unknown plaintext, but we only want to find matches
     // due to the attacker-supplied plaintext.
-    while Some(&to_match) == adj_blocks_match(&prefix_test[..], block_size, oracle).as_ref().map(|x| &x.1) {
+    while Some(&to_match) == adj_blocks_match(&prefix_test[..], block_size, oracle).map(|x| x.1).as_ref() {
         prefix_test.pop();
     }
     let n = prefix_test.len() + 1;
     let prefix_pad = n % block_size;
     let length = ix * block_size - prefix_pad;
 
-    assert_eq!(ix, length / block_size + 1);
     length
 }
 
 fn _14() {
+    // This whole chunk just constructs the oracle from the challenge
+    // description: take some bytes, prepend with an unknown random prefix
+    // of some length between 0 and 255, append an unknown message,
+    // encrypt the whole thing under ECB under a random key.
+    // Given that the same key, prefix, and message are used each time,
+    // we can decrypt the message.
     let key = rand::random();
     let prefix_length: u8 = rand::random();
     let mut prefix = Vec::new();
@@ -337,17 +342,14 @@ fn _14() {
     });
 
     // Let's figure out how long the prefix is.
-    //
     // To do that, we first need to determine the block size
     let block_size = ecb_block_size(oracle);
+    let length = guess_prefix_length(oracle, block_size);
 
-    let prefix_length_14 = prefix_length_14(oracle, block_size);
-    let ix = prefix_length_14 / block_size + 1;
-    // We want to always pad with this many bytes no matter what
-    // so that the rest is block-aligned.
-    let prefix_pad = prefix_length_14 % block_size;
+    // Knowing the prefix length, we can break it much like we would break
+    // a similar oracle with no prefix.
+    let res = break_ecb_with_oracle(oracle, block_size, length);
+    let unpad_res = undo_pkcs7(&res[..]);
 
-    let res = break_ecb_with_oracle(oracle, block_size, ix, prefix_pad);
-    println!("{}", from_utf8(&res[..]).unwrap());
-    assert_eq!(&include_bytes!("../data/rollin.txt")[..], &res[..]);
+    assert_eq!(&include_bytes!("../data/rollin.txt")[..], &unpad_res[..]);
 }
