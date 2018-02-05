@@ -13,11 +13,11 @@ use std::str::from_utf8;
 use std::io::Write;
 
 pub fn set_2() {
-    /*_9();
+    _9();
     _10();
     _11();
-    _12();
-    _13();*/
+    //_12();
+    //_13();
     _14();
 }
 
@@ -69,13 +69,29 @@ fn is_ecb(ora: &Oracle, block_size: usize) -> bool {
     ecb_test_out[..block_size] == ecb_test_out[block_size..block_size * 2]
 }
 
-fn break_ecb_with_oracle(ora: &Oracle, block_size: usize, start_block: usize) -> Vec<u8> {
+
+fn break_ecb_with_oracle(
+    ora: &Oracle,
+    block_size: usize,
+    start_block: usize,
+    const_pad: usize) -> Vec<u8> {
+
+    let mut freq: Vec<u8> = Vec::new();
+    freq.extend_from_slice(b" ");
+    freq.extend_from_slice(b"etaoinshrdlcumwfgypbvkjxqz");
+    freq.extend_from_slice(b"0123456789");
+    freq.extend_from_slice(b"\n.,!?-'\"/");
+    freq.extend_from_slice(b"ETAOINSHRDLCUMWFGYPBVKJXQZ");
+
     let mut known_bytes = Vec::new();
 
+    // We want to look at each block of the unknown plaintext in turn!
+    // If there's an unknown prefix, we want to start at the first block that
+    // we have full control over.
     'outer: for block_ix in start_block.. {
         for offs in 1..=block_size {
             let pad_width = block_size - offs;
-            let mut padding = vec![b'A'; pad_width];
+            let mut padding = vec![b'A'; pad_width + const_pad];
 
             // Get the actual value of the block.
             let actual = &ora(&padding[..])[
@@ -91,17 +107,29 @@ fn break_ecb_with_oracle(ora: &Oracle, block_size: usize, start_block: usize) ->
             // plaintext of the `actual` block.
             let mut d = vec![b'A'; block_size];
             d.extend_from_slice(&known_bytes[..]);
-            let mut dict_padding = Vec::new();
-            let slice_start = block_ix * block_size + offs;
+            let mut dict_padding = vec![b'A'; const_pad];
+            let slice_start = known_bytes.len() + 1;
             dict_padding.extend_from_slice(&d[slice_start..slice_start + block_size - 1]);
             dict_padding.push(0);
+
+            assert_eq!(dict_padding[..const_pad], b"AAAAAAAAAAAAAAAA"[..const_pad]);
+            assert_eq!(dict_padding.len() - const_pad, block_size);
+
+            /*println!("Comparing (pad={})", const_pad);
+            println!("    block {} of ora({:?}) to", block_ix,    padding);
+            println!("    block {} of ora({:?}).",   start_block, dict_padding);*/
             let mut matched = false;
-            for last_byte in 0..=255 {
-                dict_padding[block_size - 1] = last_byte;
-                let this_option = ora(&dict_padding[..]);
-                if &this_option[..block_size] == actual {
+            for last_byte in freq.iter() {
+                dict_padding[const_pad + block_size - 1] = *last_byte;
+                let this_option = &ora(&dict_padding[..])[
+                    block_size * start_block..
+                    block_size * (start_block + 1)
+                ];
+                assert_eq!(this_option.len(), actual.len());
+                if this_option == actual {
                     matched = true;
-                    known_bytes.push(last_byte);
+                    println!("{}", char::from(*last_byte));
+                    known_bytes.push(*last_byte);
                     break;
                 }
             }
@@ -132,7 +160,7 @@ fn _12() {
     assert!(is_ecb(ora, block_size));
 
     // Break it
-    let answer = break_ecb_with_oracle(ora, block_size, 0); 
+    let answer = break_ecb_with_oracle(ora, block_size, 0, 0);
     println!("{}", from_utf8(&answer[..]).unwrap());
 }
 
@@ -275,12 +303,12 @@ fn _14() {
         v.extend_from_slice(&unknown[..]);
         aes128_ecb_encode_pad(&v[..], key)
     });
-    
+
     // Let's figure out how long the prefix is.
     //
     // To do that, we first need to determine the block size
-    let block_size = ecb_block_size(oracle); // FIXME
-    
+    let block_size = ecb_block_size(oracle);
+
     // Passing this into the oracle is guaranteed to result in two adjacent
     // matching blocks, so we can safely unwrap.
     let mut prefix_test = vec![b'A'; block_size*3];
@@ -314,50 +342,7 @@ fn _14() {
     // its neighbor.
     let guessed_prefix = ix * block_size - prefix_pad;
 
-    let mut known_bytes = Vec::new();
-    'outer: for block_ix in ix.. {
-        for offs in 1..=block_size {
-            let pad_width = block_size - offs;
-            let mut padding = vec![b'A'; prefix_pad + pad_width];
-
-            // We want to only look at the blocks that come after the prefix
-            // string!
-            let actual = &oracle(&padding[..])[
-                block_size * block_ix..
-                block_size * (block_ix + 1)
-            ];
-
-            // set dict_padding to the last block_size-1 of known_bytes
-            // and then push a 0.
-            // if we don't have block_size-1 of known bytes yet, prepend b'A'
-            // as necessary.
-
-            let mut dict_padding = {
-                let mut d = vec![b'A'; block_size];
-                d.extend_from_slice(&known_bytes[..]);
-                let mut dict_padding = vec![b'A'; prefix_pad];
-                let slice_start = (block_ix-ix) * block_size + offs;
-                // ?
-                dict_padding.extend_from_slice(&d[slice_start..slice_start + block_size - 1]);
-                // ?
-                dict_padding.push(0);
-                dict_padding
-            };
-
-            let mut matched = false;
-            for last_byte in 0..=255 {
-                dict_padding[block_size - 1] = last_byte;
-                let this_option = &oracle(&dict_padding[..])[ix*block_size..ix*(block_size+1)];
-                if this_option == actual {
-                    matched = true;
-                    print!("{}", char::from(last_byte));
-                    known_bytes.push(last_byte);
-                    break;
-                }
-            }
-            if !matched {
-                break;
-            }
-        }
-    }
+    let res = break_ecb_with_oracle(oracle, block_size, ix, prefix_pad);
+    println!("{}", from_utf8(&res[..]).unwrap());
+    assert_eq!(&include_bytes!("../data/rollin.txt")[..], &res[..]);
 }
