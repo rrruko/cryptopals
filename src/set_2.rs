@@ -76,6 +76,8 @@ fn break_ecb_with_oracle(
     start_block: usize,
     const_pad: usize) -> Vec<u8> {
 
+    // Iterating last_byte over freq is a little faster than iterating over
+    // 0..=255, but it's not necessary.
     let mut freq: Vec<u8> = Vec::new();
     freq.extend_from_slice(b" ");
     freq.extend_from_slice(b"etaoinshrdlcumwfgypbvkjxqz");
@@ -287,6 +289,36 @@ fn adj_blocks_match(known_pt: &[u8], block_size: usize, oracle: &Oracle) -> Opti
     None
 }
 
+fn prefix_length_14(oracle: &Oracle, block_size: usize) -> usize {
+    // Passing this into the oracle is guaranteed to result in two adjacent
+    // matching blocks, so we can safely unwrap.
+    let mut prefix_test = vec![b'A'; block_size*3];
+    let res = adj_blocks_match(&prefix_test[..], block_size, oracle).unwrap();
+    let ix = res.0;
+    let to_match = res.1;
+
+    // (To be safe, we should repeat prefix_test with vec![b'B'; block_size*3]
+    // which will let us confirm where our injected text is going in case
+    // the prefix or the plaintext results in false positives.
+    // For instance, there's a chance that the prefix contains matching
+    // adjacent blocks, or that the last fractional block of prefix text is
+    // all b'A'.)
+
+    // Let's remove elements until we stop having two adjacent matching blocks
+    // We gotta be careful here because adj_blocks_match might find a match
+    // due to the actual unknown plaintext, but we only want to find matches
+    // due to the attacker-supplied plaintext.
+    while Some(&to_match) == adj_blocks_match(&prefix_test[..], block_size, oracle).as_ref().map(|x| &x.1) {
+        prefix_test.pop();
+    }
+    let n = prefix_test.len() + 1;
+    let prefix_pad = n % block_size;
+    let length = ix * block_size - prefix_pad;
+
+    assert_eq!(ix, length / block_size + 1);
+    length
+}
+
 fn _14() {
     let key = rand::random();
     let prefix_length: u8 = rand::random();
@@ -309,38 +341,11 @@ fn _14() {
     // To do that, we first need to determine the block size
     let block_size = ecb_block_size(oracle);
 
-    // Passing this into the oracle is guaranteed to result in two adjacent
-    // matching blocks, so we can safely unwrap.
-    let mut prefix_test = vec![b'A'; block_size*3];
-    let res = adj_blocks_match(&prefix_test[..], block_size, oracle).unwrap();
-    let ix = res.0;
-    let to_match = res.1;
-    println!("{}", from_utf8(&base16_encode(&to_match[..])[..]).unwrap());
-
-    // (To be safe, we should repeat prefix_test with vec![b'B'; block_size*3]
-    // which will let us confirm where our injected text is going in case
-    // the prefix or the plaintext results in false positives.
-    // For instance, there's a chance that the prefix contains matching
-    // adjacent blocks, or that the last fractional block of prefix text is
-    // all b'A'.)
-
-    // Let's remove elements until we stop having two adjacent matching blocks
-    // We gotta be careful here because adj_blocks_match might find a match
-    // due to the actual unknown plaintext, but we only want to find matches
-    // due to the attacker-supplied plaintext.
-    while Some(&to_match) == adj_blocks_match(&prefix_test[..], block_size, oracle).map(|x| x.1).as_ref() {
-        prefix_test.pop();
-    }
-    let n = prefix_test.len() + 1;
-
+    let prefix_length_14 = prefix_length_14(oracle, block_size);
+    let ix = prefix_length_14 / block_size + 1;
     // We want to always pad with this many bytes no matter what
     // so that the rest is block-aligned.
-    let prefix_pad = n % block_size;
-
-    // So n is the shortest length of a string of As that gives matching
-    // blocks, and ix is the block number of the first block that matches
-    // its neighbor.
-    let guessed_prefix = ix * block_size - prefix_pad;
+    let prefix_pad = prefix_length_14 % block_size;
 
     let res = break_ecb_with_oracle(oracle, block_size, ix, prefix_pad);
     println!("{}", from_utf8(&res[..]).unwrap());
