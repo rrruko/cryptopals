@@ -16,9 +16,10 @@ pub fn set_2() {
     _9();
     _10();
     _11();
-    //_12();
+    _12();
     _13();
     _14();
+    _15();
 }
 
 fn _9() {
@@ -352,4 +353,11 @@ fn _14() {
     let unpad_res = undo_pkcs7(&res[..]);
 
     assert_eq!(&include_bytes!("../data/rollin.txt")[..], &unpad_res[..]);
+}
+
+fn _15() {
+    assert!(undo_pkcs7_checked(b"ICE ICE BABY\x04\x04\x04\x04").is_some());
+
+    assert!(undo_pkcs7_checked(b"ICE ICE BABY\x05\x05\x05\x05").is_none());
+    assert!(undo_pkcs7_checked(b"ICE ICE BABY\x01\x02\x03\x04").is_none());
 }
