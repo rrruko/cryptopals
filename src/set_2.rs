@@ -3,6 +3,7 @@ use codec::*;
 use oracle::*;
 use pkcs::*;
 use rand;
+use xor::*;
 
 use nom::*;
 use nom::IResult::*;
