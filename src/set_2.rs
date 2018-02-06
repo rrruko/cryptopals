@@ -13,7 +13,6 @@ use std::str::from_utf8;
 use std::io::Write;
 
 pub fn set_2() {
-    _16();
     _9();
     _10();
     _11();
@@ -21,6 +20,7 @@ pub fn set_2() {
     _13();
     _14();
     _15();
+    _16();
 }
 
 fn _9() {
@@ -92,13 +92,13 @@ fn break_ecb_with_oracle(ora: &Oracle, block_size: usize, prefix_length: usize) 
     // We want to always pad with this many bytes no matter what
     // so that the rest is block-aligned.
     let const_pad = block_size - (prefix_length % block_size);
-    
+
     let start_block = prefix_length / block_size + 1;
 
     // Iterating last_byte over freq is a little faster than iterating over
     // 0..=255, but it's not necessary.
     let mut freq: Vec<u8> = bytes_by_english_freq();
-    
+
     let mut known_bytes = Vec::new();
 
     // We want to look at each block of the unknown plaintext in turn!
@@ -160,7 +160,7 @@ fn _12() {
     let unknown = base64_decode_filter(
         include_bytes!("../data/12.txt"));
 
-    let ora: &Oracle = &(move |buffer| {
+    let ora = &(move |buffer: &[u8]| {
         let mut v = Vec::new();
         v.extend_from_slice(buffer);
         v.extend_from_slice(&unknown);
@@ -232,7 +232,7 @@ fn pretty_ct(ciphertext: &[u8]) {
 // be 13
 fn _13() {
     let key = rand::random();
-    let oracle: &Oracle = &(move |bytes| {
+    let oracle = &(move |bytes: &[u8]| {
         let mut v = Vec::new();
         v.extend_from_slice(bytes);
         mk_encrypted_url_profile(&v, key)
@@ -340,7 +340,7 @@ fn _14() {
     }
     let unknown = base64_decode_filter(
         include_bytes!("../data/12.txt"));
-    let oracle: &Oracle = &(move |bytes| {
+    let oracle = &(move |bytes: &[u8]| {
         let mut v = Vec::new();
         v.extend_from_slice(&prefix);
         v.extend_from_slice(bytes);
@@ -413,7 +413,7 @@ decrypted:
 fn _16() {
     let key = rand::random();
     let iv = rand::random();
-    let oracle = &(|bytes: &[u8]| {
+    let oracle = |bytes: &[u8]| {
         let mut v = Vec::new();
         v.extend_from_slice(b"comment1=cooking");
         v.extend_from_slice(b"%20MCs;userdata=");
@@ -422,30 +422,30 @@ fn _16() {
         v.extend_from_slice(b"e%20a%20pound%20");
         v.extend_from_slice(b"of%20bacon");
         aes128_cbc_encode_pad(&v, key, iv)
-    });
+    };
 
-    let authenticate = &(|ciphertext: &[u8]| {
+    let authenticate = |ciphertext: &[u8]| {
         let res = aes128_cbc_decode_pad(&ciphertext, key, iv).unwrap();
         let needle = b";admin=true;";
         res.windows(needle.len()).position(|window| window == needle)
-    });
+    };
 
     let block_size = 16;
 
     // We can't pass the string ";admin=true;" into the oracle, but we
     // can pass ":admin<true:", which is off by only three bits.
     // y represents the bit locations where it's off.
-    let x = [0; 16];
-    let mut y = x;
-    y[4]  = 1;
-    y[10] = 1;
-    y[15] = 1;
+    // (We can actually pass in pretty much whatever we want as long as we
+    // flip the right bits in the ciphertext.)
+    let almost = b"AAAA:admin<true:";
+    let goal   = b"AAAA;admin=true;";
+    let y = fixed_xor(almost, goal).unwrap();
 
     // Pass two block-aligned chunks to the oracle. Because we know that the
     // prefix is 32 bytes long, we don't need to worry about padding.
     let mut evil = Vec::new();
     evil.extend_from_slice(&y);
-    evil.extend_from_slice(b"AAAA:admin<true:");
+    evil.extend_from_slice(almost);
     let mut enc = oracle(&evil);
 
     // Now modify the ciphertext so that the first block we passed in has its
