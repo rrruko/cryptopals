@@ -5,13 +5,9 @@ use pkcs::*;
 use rand;
 use xor::*;
 
-use nom::*;
 use nom::IResult::*;
-use nom::Needed::Size;
 
-use std::collections::HashMap;
 use std::str::from_utf8;
-use std::io::Write;
 
 pub fn set_2() {
     _9();
@@ -98,7 +94,7 @@ fn break_ecb_with_oracle(ora: &Oracle, block_size: usize, prefix_length: usize) 
 
     // Iterating last_byte over freq is a little faster than iterating over
     // 0..=255, but it's not necessary.
-    let mut freq: Vec<u8> = bytes_by_english_freq();
+    let freq: Vec<u8> = bytes_by_english_freq();
 
     let mut known_bytes = Vec::new();
 
@@ -133,7 +129,7 @@ fn break_ecb_with_oracle(ora: &Oracle, block_size: usize, prefix_length: usize) 
             assert_eq!(dict_padding.len() - const_pad, block_size);
 
             let mut matched = false;
-            for last_byte in freq.iter() {
+            for last_byte in &freq {
                 dict_padding[const_pad + block_size - 1] = *last_byte;
                 let this_option = &ora(&dict_padding)[
                     block_size * start_block..
@@ -224,7 +220,7 @@ fn pretty_ct(ciphertext: &[u8]) {
     for chunk in ciphertext.chunks(16) {
         print!("{} ", from_utf8(&base16_encode(chunk)).unwrap());
     }
-    println!("");
+    println!();
 }
 
 // Everything here is hardcoded because I'm lazy but you can do this even if
@@ -235,7 +231,8 @@ fn _13() {
     let key = rand::random();
     let oracle = &(move |bytes: &[u8]| {
         let mut v = Vec::new();
-        v.extend_from_slice(bytes);
+        let sanitized = sanitize(bytes);
+        v.extend_from_slice(&sanitized);
         mk_encrypted_url_profile(&v, key)
     });
 
@@ -284,8 +281,7 @@ fn _13() {
 // Return the first block that matches the next one, and its position in units
 // of block_size.
 fn adj_blocks_match(known_pt: &[u8], block_size: usize, oracle: &Oracle) -> Option<(usize, Vec<u8>)> {
-    let mut match_exists = false;
-    let mut bytes = oracle(known_pt);
+    let bytes = oracle(known_pt);
     let block_count = bytes.len() / block_size;
     for i in 0..block_count-1 {
         let first  = &bytes[block_size * i      ..block_size * (i + 1)];
@@ -321,9 +317,8 @@ fn guess_prefix_length(oracle: &Oracle, block_size: usize) -> usize {
     }
     let n = prefix_test.len() + 1;
     let prefix_pad = n % block_size;
-    let length = ix * block_size - prefix_pad;
 
-    length
+    ix * block_size - prefix_pad
 }
 
 fn _14() {
@@ -336,7 +331,7 @@ fn _14() {
     let key = rand::random();
     let prefix_length: u8 = rand::random();
     let mut prefix = Vec::new();
-    for i in 0..prefix_length {
+    for _ in 0..prefix_length {
         prefix.push(rand::random());
     }
     let unknown = base64_decode_filter(
@@ -426,7 +421,7 @@ fn _16() {
     };
 
     let authenticate = |ciphertext: &[u8]| {
-        let res = aes128_cbc_decode_pad(&ciphertext, key, iv).unwrap();
+        let res = aes128_cbc_decode_pad(ciphertext, key, iv).unwrap();
         let needle = b";admin=true;";
         res.windows(needle.len()).position(|window| window == needle)
     };

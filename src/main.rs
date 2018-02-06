@@ -4,6 +4,7 @@
 
 extern crate itertools;
 extern crate nalgebra as na;
+#[macro_use]
 extern crate nom;
 extern crate rand;
 
@@ -19,6 +20,6 @@ mod set_1;
 mod set_2;
 
 fn main() {
-   //set_1::set_1();
+   set_1::set_1();
    set_2::set_2();
 }
