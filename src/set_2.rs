@@ -368,53 +368,20 @@ fn _15() {
     assert!(undo_pkcs7_checked(b"ICE ICE BABY\x01\x02\x03\x04").is_none());
 }
 
-fn _16() {
-    let key = rand::random();
-    let iv = rand::random();
-    let oracle = &(|bytes: &[u8]| {
-        let mut v = Vec::new();
-        v.extend_from_slice(b"comment1=cooking");
-        v.extend_from_slice(b"%20MCs;userdata=");
-        v.extend_from_slice(bytes);
-        v.extend_from_slice(b";comment2=%20lik");
-        v.extend_from_slice(b"e%20a%20pound%20");
-        v.extend_from_slice(b"of%20bacon");
-        aes128_cbc_encode_pad(&v, key, iv)
-    });
-
-    let authenticate = &(|ciphertext: &[u8]| {
-        let res = aes128_cbc_decode_pad(&ciphertext, key, iv).unwrap();
-        let needle = b";admin=true;";
-        res.windows(needle.len()).position(|window| window == needle)
-    });
-
-    let block_size = 16;
-
-    let x = [0; 16];
-    let mut y = x;
-    y[4]  = 1;
-    y[10] = 1;
-    y[15] = 1;
-
-    let mut evil = Vec::new();
-    evil.extend_from_slice(&y);
-    evil.extend_from_slice(b"AAAA:admin<true:");
-
-    let mut enc = oracle(&evil);
-    for i in 0..block_size {
-        enc[2 * block_size + i] ^= y[i];
-    }
-    let idk = authenticate(&enc).is_some();
-    let dec = aes128_cbc_decode_pad(&enc, key, iv).unwrap();
-    println!("{}", from_utf8(&dec[3 * block_size..4 * block_size]).unwrap());
-    assert!(idk);
-}
-
 /*
     0000100000100001 <- 0 is \x00 and 1 is \x01
 xor AAAA:admin<true: <- : and < are legal
 --------------------
     AAAA;admin=true;
+
+We can pass any two blocks we want as long as their bitwise XOR results in a
+string containing ";admin=true;". In fact, we can even just pass
+    0000000000000000
+    0000000000000000
+and then just write
+    AAAA;admin=true;
+to the ciphertext of the first block, which will flip the bits in the
+decrypted text of the second block so that it reads "AAAA;admin=true;".
 
 oracle pt:
     comment1=cooking    prefix
@@ -443,3 +410,53 @@ decrypted:
     e%20a%20pound%20
     of%20bacon______
 */
+fn _16() {
+    let key = rand::random();
+    let iv = rand::random();
+    let oracle = &(|bytes: &[u8]| {
+        let mut v = Vec::new();
+        v.extend_from_slice(b"comment1=cooking");
+        v.extend_from_slice(b"%20MCs;userdata=");
+        v.extend_from_slice(bytes);
+        v.extend_from_slice(b";comment2=%20lik");
+        v.extend_from_slice(b"e%20a%20pound%20");
+        v.extend_from_slice(b"of%20bacon");
+        aes128_cbc_encode_pad(&v, key, iv)
+    });
+
+    let authenticate = &(|ciphertext: &[u8]| {
+        let res = aes128_cbc_decode_pad(&ciphertext, key, iv).unwrap();
+        let needle = b";admin=true;";
+        res.windows(needle.len()).position(|window| window == needle)
+    });
+
+    let block_size = 16;
+
+    // We can't pass the string ";admin=true;" into the oracle, but we
+    // can pass ":admin<true:", which is off by only three bits.
+    // y represents the bit locations where it's off.
+    let x = [0; 16];
+    let mut y = x;
+    y[4]  = 1;
+    y[10] = 1;
+    y[15] = 1;
+
+    // Pass two block-aligned chunks to the oracle. Because we know that the
+    // prefix is 32 bytes long, we don't need to worry about padding.
+    let mut evil = Vec::new();
+    evil.extend_from_slice(&y);
+    evil.extend_from_slice(b"AAAA:admin<true:");
+    let mut enc = oracle(&evil);
+
+    // Now modify the ciphertext so that the first block we passed in has its
+    // bits flipped. When the ciphertext gets decrypted, those bits in the
+    // *next* block get flipped, which turns "AAAA:admin<true:" into
+    // "AAAA;admin=true;"
+    for i in 0..block_size {
+        enc[2 * block_size + i] ^= y[i];
+    }
+
+    // If is_some returns true then the substring ";admin=true;" was found.
+    let is_admin = authenticate(&enc).is_some();
+    assert!(is_admin);
+}
