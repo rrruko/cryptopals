@@ -18,8 +18,10 @@ mod xor;
 
 mod set_1;
 mod set_2;
+mod set_3;
 
 fn main() {
-   set_1::set_1();
-   set_2::set_2();
+   //set_1::set_1();
+   //set_2::set_2();
+   set_3::set_3();
 }

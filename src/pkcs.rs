@@ -15,11 +15,14 @@ pub fn undo_pkcs7(bytes: &[u8]) -> Vec<u8> {
 }
 
 pub fn undo_pkcs7_checked(bytes: &[u8]) -> Option<Vec<u8>> {
-    let padding_count = bytes[bytes.len() - 1];
-    for item in bytes[bytes.len() - padding_count as usize..].iter() {
-        if *item != padding_count {
+    let padding_count = bytes[bytes.len() - 1] as usize;
+    if padding_count > bytes.len() {
+        return None;
+    }
+    for item in &bytes[bytes.len() - padding_count..] {
+        if *item != padding_count as u8 {
             return None;
         }
     }
-    Some(bytes[..bytes.len() - padding_count as usize].to_vec())
+    Some(bytes[..bytes.len() - padding_count].to_vec())
 }
