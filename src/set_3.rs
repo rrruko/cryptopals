@@ -50,9 +50,7 @@ fn cbc_padding_attack_block(block: &[u8], server: &CBCServer, prev: &[u8]) -> Ve
     let mut test_ct = Vec::new();
     test_ct.extend_from_slice(prev);
     test_ct.extend_from_slice(block);
-    // test_ct:
-    //   AAAAAAAAAAAAAAAA
-    //   ????????????????
+    assert!(test_ct.len() == 32);
     for col in (0..16).rev() { // from 15 down to 0 inclusive
         let pad = 16 - col as u8; // from 1 up to 16 inclusive
         for i in col+1..16 {
@@ -60,11 +58,11 @@ fn cbc_padding_attack_block(block: &[u8], server: &CBCServer, prev: &[u8]) -> Ve
         }
         let mut valid_found = false;
         let orig = test_ct[col];
-        for byte in 0..=255 {
-            test_ct[col] = byte;
+        for guess in 0..=255 {
+            test_ct[col] = guess;
             valid_found |= server.verify_aes_128_cbc(&test_ct);
-            if valid_found { // ...then we know that orig ^ byte = secret ^ pad
-                let learned_byte = byte ^ pad ^ orig;
+            if valid_found { // ...then we know that orig ^ guess = secret ^ pad
+                let learned_byte = guess ^ orig ^ pad;
                 println!("Learned byte {}", char::from(learned_byte));
                 known_bytes[col] = learned_byte;
                 break;
