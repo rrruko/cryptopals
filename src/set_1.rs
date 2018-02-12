@@ -131,7 +131,7 @@ fn _6() {
 fn _7() {
     let key = b"YELLOW SUBMARINE";
     let enc = base64_decode_filter(include_bytes!("../data/7.txt"));
-    let dec = aes128_ecb_decode_pad(&enc[..], *key).unwrap();
+    let dec = aes128_ecb_decode_pad(&enc, *key).unwrap();
     let res = include_bytes!("../data/7_result.txt");
     assert_eq!(dec[..], res[..]);
 }
