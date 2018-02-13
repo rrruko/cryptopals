@@ -63,7 +63,7 @@ fn cbc_padding_attack_block(block: &[u8], server: &CBCServer, prev: &[u8]) -> Ve
             valid_found |= server.verify_aes_128_cbc(&test_ct);
             if valid_found { // ...then we know that orig ^ guess = secret ^ pad
                 let learned_byte = guess ^ orig ^ pad;
-                println!("Learned byte {}", char::from(learned_byte));
+                println!("Learned byte {} (byte {}, guessed {})", char::from(learned_byte), learned_byte, guess);
                 known_bytes[col] = learned_byte;
                 break;
             }
