@@ -60,7 +60,17 @@ fn cbc_padding_attack_block(block: &[u8], server: &CBCServer, prev: &[u8]) -> Ve
         let orig = test_ct[col];
         for guess in 0..=255 {
             test_ct[col] = guess;
-            valid_found |= server.verify_aes_128_cbc(&test_ct);
+            let maybe_valid = server.verify_aes_128_cbc(&test_ct);
+            // It's possible that the padding isn't what we think it is, so
+            // mutate the preceding byte in case it's interfering.
+            if col > 0 {
+                test_ct[col - 1] ^= 0x01;
+            }
+            let definitely_valid = maybe_valid && server.verify_aes_128_cbc(&test_ct);
+            if col > 0 {
+                test_ct[col - 1] ^= 0x01;
+            }
+            valid_found |= definitely_valid;
             if valid_found { // ...then we know that orig ^ guess = secret ^ pad
                 let learned_byte = guess ^ orig ^ pad;
                 println!("Learned byte {} (byte {}, guessed {})", char::from(learned_byte), learned_byte, guess);
@@ -68,7 +78,7 @@ fn cbc_padding_attack_block(block: &[u8], server: &CBCServer, prev: &[u8]) -> Ve
                 break;
             }
         }
-        assert!(valid_found);
+        assert!(valid_found, " valid_found failed when col={}", col);
     }
     println!("Learned block: {}", from_utf8(&known_bytes).unwrap());
     known_bytes
