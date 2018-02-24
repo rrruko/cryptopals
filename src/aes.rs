@@ -365,37 +365,4 @@ mod tests {
         assert_eq!(ecb_decrypt(AES128, &enc, &key).unwrap(), plaintext);
     }
 
-    #[test]
-    fn test_cbc_invertible() {
-        let plaintext = b"h-hewwo??";
-        let key = b"YELLOW SUBMARINE";
-        let iv = [
-            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-            0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f
-        ];
-        let enc = cbc_encrypt(AES128, &plaintext[..], key, &iv);
-        assert_eq!(cbc_decrypt(AES128, &enc, key, &iv).unwrap(), plaintext);
-    }
-
-    #[test]
-    fn test_ctr_involution() {
-        let plaintexts: Vec<&[u8]> = vec![
-            b"a", b"ab", b"abc", b"abcd",
-            b"abcdefghijklmnopqrstuvwxyz0123456789",
-            b"abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()"
-        ];
-        let key = [
-            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-            0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f
-        ];
-        let nonce = [
-            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07
-        ];
-        let ciphertexts = plaintexts.into_iter()
-            .map(|p| (p, ctr_encrypt(AES128, &ctr_encrypt(AES128, p, key, nonce), key, nonce)))
-            .collect::<Vec<(&[u8], Vec<u8>)>>();
-        for (pt, ct) in ciphertexts {
-            assert_eq!(pt[..], ct[..]);
-        }
-    }
 }
