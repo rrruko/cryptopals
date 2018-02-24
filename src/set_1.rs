@@ -12,6 +12,7 @@ use std::str::from_utf8;
 use itertools::Itertools;
 
 pub fn set_1() {
+    println!("Set 1");
     _1();
     _2();
     _3();

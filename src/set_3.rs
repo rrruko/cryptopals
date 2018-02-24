@@ -3,10 +3,10 @@ use codec::*;
 
 use rand;
 use rand::Rng;
-use std::io;
 use std::str::from_utf8;
 
 pub fn set_3() {
+    println!("Set 3");
     _17();
     _18();
 }
@@ -109,7 +109,7 @@ fn _17() {
     let server = CBCServer::new();
     let enc = server.get_random_ciphertext();
     assert!(server.verify_aes_128_cbc(&enc));
-    let ans = cbc_padding_attack(&enc, &server, server.get_iv());
+    cbc_padding_attack(&enc, &server, server.get_iv());
 }
 
 fn _18() {
