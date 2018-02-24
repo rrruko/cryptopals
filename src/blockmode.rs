@@ -112,6 +112,7 @@ pub fn ctr_encrypt<T>(cipher: &T, bytes: &[u8], key: [u8; 16], nonce: [u8; 8]) -
 #[cfg(test)]
 mod tests {
     use super::*;
+    use aes::*;
 
     #[test]
     fn test_cbc_invertible() {
