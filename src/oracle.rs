@@ -1,3 +1,4 @@
+use aes::*;
 use blockmode::*;
 use rand;
 use rand::distributions::{IndependentSample, Range};

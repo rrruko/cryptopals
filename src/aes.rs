@@ -1,11 +1,31 @@
-use pkcs::*;
 use s_box::*;
 
-use itertools::zip;
+use blockmode::*;
 use na::{Matrix4};
 use std::collections::HashMap;
 
 type State = Matrix4<u8>;
+
+#[derive(Debug, Copy, Clone)]
+pub struct AES { block_size: usize }
+
+pub const AES128: &AES = &AES { block_size: 16 };
+
+impl BlockCipher for AES {
+   fn encrypt(&self, chunk: &[u8], key: &[u8]) -> Vec<u8> {
+        let mut k = vec![0; self.block_size];
+        k.copy_from_slice(key);
+        from_matrix(aes128_chunk(to_matrix(chunk), &k))
+    }
+   fn decrypt(&self, chunk: &[u8], key: &[u8]) -> Vec<u8> {
+        let mut k = vec![0; self.block_size];
+        k.copy_from_slice(key);
+        from_matrix(aes128_decode_chunk(to_matrix(chunk), &k))
+    }
+   fn block_size(&self) -> usize {
+        self.block_size
+   }
+}
 
 pub fn to_matrix(bytes: &[u8]) -> State {
     Matrix4::from_fn(|r, c| bytes[4 * c + r])
@@ -353,8 +373,8 @@ mod tests {
             0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
             0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f
         ];
-        let enc = aes128_cbc_encode_pad(&plaintext[..], *key, iv);
-        assert_eq!(aes128_cbc_decode_pad(&enc, *key, iv).unwrap(), plaintext);
+        let enc = cbc_encrypt(AES128, &plaintext[..], key, &iv);
+        assert_eq!(cbc_decrypt(AES128, &enc, key, &iv).unwrap(), plaintext);
     }
 
     #[test]
@@ -372,7 +392,7 @@ mod tests {
             0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07
         ];
         let ciphertexts = plaintexts.into_iter()
-            .map(|p| (p, aes128_ctr(&aes128_ctr(p, key, nonce), key, nonce)))
+            .map(|p| (p, ctr_encrypt(AES128, &ctr_encrypt(AES128, p, key, nonce), key, nonce)))
             .collect::<Vec<(&[u8], Vec<u8>)>>();
         for (pt, ct) in ciphertexts {
             assert_eq!(pt[..], ct[..]);

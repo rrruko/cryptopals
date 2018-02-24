@@ -1,4 +1,3 @@
-use aes::*;
 use pkcs::*;
 
 use byteorder::{ByteOrder, LittleEndian};
@@ -10,27 +9,6 @@ pub trait BlockCipher: Copy {
     fn encrypt(&self, &[u8], &[u8]) -> Vec<u8>;
     fn decrypt(&self, &[u8], &[u8]) -> Vec<u8>;
     fn block_size(&self) -> usize;
-}
-
-#[derive(Debug, Copy, Clone)]
-pub struct AES { block_size: usize }
-
-pub const AES128: &AES = &AES { block_size: 16 };
-
-impl BlockCipher for AES {
-   fn encrypt(&self, chunk: &[u8], key: &[u8]) -> Vec<u8> {
-        let mut k = vec![0; self.block_size];
-        k.copy_from_slice(key);
-        from_matrix(aes128_chunk(to_matrix(chunk), &k))
-    }
-   fn decrypt(&self, chunk: &[u8], key: &[u8]) -> Vec<u8> {
-        let mut k = vec![0; self.block_size];
-        k.copy_from_slice(key);
-        from_matrix(aes128_decode_chunk(to_matrix(chunk), &k))
-    }
-   fn block_size(&self) -> usize {
-        self.block_size
-   }
 }
 
 // The input data is padded to the next multiple of `block_size` above its
