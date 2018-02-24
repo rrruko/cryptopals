@@ -4,23 +4,11 @@ use rand;
 use rand::distributions::{IndependentSample, Range};
 use std::collections::HashSet;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Mode {
     ECB,
     CBC
 }
-
-// good grief
-impl PartialEq for Mode {
-    fn eq(&self, other: &Mode) -> bool {
-        match (self, other) {
-            (&Mode::ECB, &Mode::ECB) | (&Mode::CBC, &Mode::CBC) => true,
-            _ => false
-        }
-    }
-}
-
-impl Eq for Mode {}
 
 fn random_pad(bytes: &[u8]) -> Vec<u8> {
     let five_to_ten = Range::new(5usize, 10);
