@@ -8,6 +8,7 @@ use std::str::from_utf8;
 
 pub fn set_3() {
     _17();
+    _18();
 }
 
 struct CBCServer {
@@ -109,4 +110,12 @@ fn _17() {
     let enc = server.get_random_ciphertext();
     assert!(server.verify_aes_128_cbc(&enc));
     let ans = cbc_padding_attack(&enc, &server, server.get_iv());
+}
+
+fn _18() {
+    let fuck = include_bytes!("../data/18.txt");
+    let expected = include_bytes!("../data/18_result.txt");
+    let dec = base64_decode(fuck).unwrap();
+    let ans = aes128_ctr(&dec, *b"YELLOW SUBMARINE", [0; 8]);
+    assert_eq!(ans[..], expected[..]);
 }

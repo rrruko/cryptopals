@@ -1,7 +1,9 @@
-use na::{Matrix4};
 use pkcs::*;
 use s_box::*;
 
+use byteorder::{ByteOrder, LittleEndian};
+use itertools::zip;
+use na::{Matrix4};
 use std::collections::HashMap;
 
 type State = Matrix4<u8>;
@@ -105,6 +107,27 @@ pub fn aes128_cbc_decode_pad(bytes: &[u8], key: [u8; 16], iv: [u8; 16])
         Some(res) => Ok(res),
         None      => Err("Invalid padding")
     }
+}
+
+fn get_ctr_keystream(key: [u8; 16], nonce: [u8; 8], ctr: u64) -> [u8; 16] {
+    let mut buf = [0; 16];
+    buf[..8].copy_from_slice(&nonce[..]);
+    LittleEndian::write_u64(&mut buf[8..], ctr);
+    println!("{:?}", buf);
+    buf
+}
+
+pub fn aes128_ctr(bytes: &[u8], key: [u8; 16], nonce: [u8; 8]) -> Vec<u8> {
+    let mut out = Vec::<u8>::new();
+    let mut block_ix = 0;
+    for chunk in bytes.chunks(16) {
+        let mut keystream = get_ctr_keystream(key, nonce, block_ix);
+        let keystream = from_matrix(aes128_chunk(to_matrix(&keystream), key));
+        let ct: Vec<u8> = zip(chunk.iter(), &keystream).map(|(i, j)| i ^ j).collect();
+        out.extend(&ct);
+        block_ix += 1;
+    }
+    out
 }
 
 fn rotate(input: [u8; 4]) -> [u8; 4] {

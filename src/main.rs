@@ -2,6 +2,7 @@
 #![feature(inclusive_range_syntax)]
 #![feature(slice_patterns)]
 
+extern crate byteorder;
 extern crate itertools;
 extern crate nalgebra as na;
 #[macro_use]
