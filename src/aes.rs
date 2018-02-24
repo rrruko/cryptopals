@@ -113,19 +113,17 @@ fn get_ctr_keystream(key: [u8; 16], nonce: [u8; 8], ctr: u64) -> [u8; 16] {
     let mut buf = [0; 16];
     buf[..8].copy_from_slice(&nonce[..]);
     LittleEndian::write_u64(&mut buf[8..], ctr);
-    println!("{:?}", buf);
+    let keystream = from_matrix(aes128_chunk(to_matrix(&buf), key));
+    buf.copy_from_slice(&keystream[..]);
     buf
 }
 
 pub fn aes128_ctr(bytes: &[u8], key: [u8; 16], nonce: [u8; 8]) -> Vec<u8> {
     let mut out = Vec::<u8>::new();
-    let mut block_ix = 0;
-    for chunk in bytes.chunks(16) {
-        let mut keystream = get_ctr_keystream(key, nonce, block_ix);
-        let keystream = from_matrix(aes128_chunk(to_matrix(&keystream), key));
+    for (block_ix, chunk) in bytes.chunks(16).enumerate() {
+        let keystream = get_ctr_keystream(key, nonce, block_ix as u64);
         let ct: Vec<u8> = zip(chunk.iter(), &keystream).map(|(i, j)| i ^ j).collect();
         out.extend(&ct);
-        block_ix += 1;
     }
     out
 }
@@ -489,5 +487,27 @@ mod tests {
         ];
         let enc = aes128_cbc_encode_pad(&plaintext[..], *key, iv);
         assert_eq!(aes128_cbc_decode_pad(&enc, *key, iv).unwrap(), plaintext);
+    }
+
+    #[test]
+    fn test_ctr_involution() {
+        let plaintexts: Vec<&[u8]> = vec![
+            b"a", b"ab", b"abc", b"abcd",
+            b"abcdefghijklmnopqrstuvwxyz0123456789",
+            b"abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()"
+        ];
+        let key = [
+            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+            0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f
+        ];
+        let nonce = [
+            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07
+        ];
+        let ciphertexts = plaintexts.into_iter()
+            .map(|p| (p, aes128_ctr(&aes128_ctr(p, key, nonce), key, nonce)))
+            .collect::<Vec<(&[u8], Vec<u8>)>>();
+        for (pt, ct) in ciphertexts {
+            assert_eq!(pt[..], ct[..]);
+        }
     }
 }
