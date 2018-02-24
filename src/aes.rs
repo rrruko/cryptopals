@@ -1,131 +1,18 @@
 use pkcs::*;
 use s_box::*;
 
-use byteorder::{ByteOrder, LittleEndian};
 use itertools::zip;
 use na::{Matrix4};
 use std::collections::HashMap;
 
 type State = Matrix4<u8>;
 
-fn to_matrix(bytes: &[u8]) -> State {
+pub fn to_matrix(bytes: &[u8]) -> State {
     Matrix4::from_fn(|r, c| bytes[4 * c + r])
 }
 
-fn from_matrix(state: State) -> Vec<u8> {
+pub fn from_matrix(state: State) -> Vec<u8> {
     state.data.as_slice().to_vec()
-}
-
-/* AES-128 */
-
-pub fn aes128_ecb_encode(bytes: &[u8], key: [u8; 16]) -> Result<Vec<u8>, &str> {
-    if bytes.len() % 16 != 0 {
-        return Err("Input length was not a multiple of 16. You may need to pad it.")
-    }
-    let mut out = Vec::<u8>::new();
-    for chunk in bytes.chunks(16) {
-        let chunk_enc = from_matrix(
-            aes128_chunk(to_matrix(chunk), key)
-        );
-        out.extend(chunk_enc);
-    }
-    Ok(out)
-}
-
-pub fn aes128_ecb_decode(bytes: &[u8], key: [u8; 16]) -> Result<Vec<u8>, &str> {
-    if bytes.len() % 16 != 0 {
-        return Err("Input length was not a multiple of 16.")
-    }
-    let mut out = Vec::<u8>::new();
-    for chunk in bytes.chunks(16) {
-        let chunk_enc = from_matrix(
-            aes128_decode_chunk(to_matrix(chunk), key)
-        );
-        out.extend(chunk_enc);
-    }
-    Ok(out)
-}
-
-// The input data is padded to the next multiple of 16 above its
-// actual length. That is, if the length is perfectly divisible by 16, we pad
-// with 0x10 16 times. Otherwise, we pad with the number of missing bytes; e.g.
-// if the last chunk of the input is [8, 6, 7, 5, 3, 0, 9], there are 9 missing
-// bytes, so it is padded to [8, 6, 7, 5, 3, 0, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9].
-pub fn aes128_ecb_encode_pad(bytes: &[u8], key: [u8; 16]) -> Vec<u8> {
-    // Length is next multiple of 16 above the original length.
-    let new_length = ((bytes.len() / 16) + 1) * 16;
-    let padded = pkcs7(bytes, new_length).unwrap();
-    aes128_ecb_encode(&padded, key).expect(
-        "AES encryption function returned an error, but the input was padded!"
-    )
-}
-
-// Since we always pad the input to aes128_ecb_encode, the last byte of the
-// decoded message is always padding, and it always tells us how many bytes
-// we padded with. So before returning the result of decryption, we cut off
-// that number of bytes.
-pub fn aes128_ecb_decode_pad(bytes: &[u8], key: [u8; 16]) -> Result<Vec<u8>, &str> {
-    let d = aes128_ecb_decode(bytes, key);
-    d.map(|dec| undo_pkcs7(&dec))
-}
-
-pub fn aes128_cbc_encode_pad(bytes: &[u8], key: [u8; 16], iv: [u8; 16])
-    -> Vec<u8> {
-    let new_length = ((bytes.len() / 16) + 1) * 16;
-    let bytes = pkcs7(bytes, new_length).unwrap();
-    let mut out = Vec::<u8>::new();
-    let mut prev = iv;
-    for chunk in bytes.chunks(16) {
-        let mut buf = [0; 16];
-        for i in 0..buf.len() {
-            buf[i] = chunk[i] ^ prev[i];
-        }
-        let enc = from_matrix(aes128_chunk(to_matrix(&buf), key));
-        out.extend(&enc);
-        prev.copy_from_slice(&enc);
-    }
-
-    out
-}
-
-pub fn aes128_cbc_decode_pad(bytes: &[u8], key: [u8; 16], iv: [u8; 16])
-    -> Result<Vec<u8>, &str> {
-    if bytes.len() % 16 != 0 {
-        return Err("Input length was not a multiple of 16.")
-    }
-    let mut out = Vec::<u8>::new();
-    let mut prev = iv;
-    for chunk in bytes.chunks(16) {
-        let mut dec = from_matrix(aes128_decode_chunk(to_matrix(chunk), key));
-        for i in 0..dec.len() {
-            dec[i] ^= prev[i];
-        }
-        out.extend(dec);
-        prev.copy_from_slice(chunk);
-    }
-    match undo_pkcs7_checked(&out) {
-        Some(res) => Ok(res),
-        None      => Err("Invalid padding")
-    }
-}
-
-fn get_ctr_keystream(key: [u8; 16], nonce: [u8; 8], ctr: u64) -> [u8; 16] {
-    let mut buf = [0; 16];
-    buf[..8].copy_from_slice(&nonce[..]);
-    LittleEndian::write_u64(&mut buf[8..], ctr);
-    let keystream = from_matrix(aes128_chunk(to_matrix(&buf), key));
-    buf.copy_from_slice(&keystream[..]);
-    buf
-}
-
-pub fn aes128_ctr(bytes: &[u8], key: [u8; 16], nonce: [u8; 8]) -> Vec<u8> {
-    let mut out = Vec::<u8>::new();
-    for (block_ix, chunk) in bytes.chunks(16).enumerate() {
-        let keystream = get_ctr_keystream(key, nonce, block_ix as u64);
-        let ct: Vec<u8> = zip(chunk.iter(), &keystream).map(|(i, j)| i ^ j).collect();
-        out.extend(&ct);
-    }
-    out
 }
 
 fn rotate(input: [u8; 4]) -> [u8; 4] {
@@ -150,7 +37,7 @@ fn core(input: [u8; 4], i: usize) -> [u8; 4] {
     output
 }
 
-fn aes128_key_schedule(key: [u8; 16], num_bytes: u8) -> Vec<u8> {
+fn aes128_key_schedule(key: &[u8], num_bytes: u8) -> Vec<u8> {
     let mut out = key.to_vec();
     let mut i = 1;
     let n = 16;
@@ -173,7 +60,7 @@ fn aes128_key_schedule(key: [u8; 16], num_bytes: u8) -> Vec<u8> {
     out
 }
 
-fn aes128_chunk(state: State, key: [u8; 16]) -> State {
+pub fn aes128_chunk(state: State, key: &[u8]) -> State {
     let rijndael_key = aes128_key_schedule(key, 176);
     let mut state = aes128_initial_round(state, to_matrix(&rijndael_key[0..16]));
     for i in 1..10 {
@@ -183,7 +70,7 @@ fn aes128_chunk(state: State, key: [u8; 16]) -> State {
     aes128_final_round(state, to_matrix(&rijndael_key[16 * 10..16 * 11]))
 }
 
-fn aes128_decode_chunk(state: State, key: [u8; 16]) -> State {
+pub fn aes128_decode_chunk(state: State, key: &[u8]) -> State {
     let rijndael_key = aes128_key_schedule(key, 176);
     let mut state = aes128_final_inv(state, to_matrix(&rijndael_key[16 * 10 .. 16 * 11]));
     for i in 1..10 {
@@ -412,7 +299,7 @@ mod tests {
 
     #[test]
     fn test_key_schedule() {
-        let key = [0; 16];
+        let key = &[0; 16];
         let expanded = aes128_key_schedule(key, 176);
         assert_eq!(expanded[0], 0x0);
         assert_eq!(expanded[16], 0x62);
@@ -437,33 +324,14 @@ mod tests {
         // (http://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.197.pdf)
         let plaintext = [
             0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
-            0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff
-        ];
-        let key = [
-            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-            0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f
-        ];
-        let goal_enc = [
-            0x69, 0xc4, 0xe0, 0xd8, 0x6a, 0x7b, 0x04, 0x30,
-            0xd8, 0xcd, 0xb7, 0x80, 0x70, 0xb4, 0xc5, 0x5a
-        ];
-        let real_enc = aes128_ecb_encode(&plaintext, key).unwrap();
-        assert_eq!(aes128_ecb_encode(&plaintext, key).unwrap(), goal_enc);
-        assert_eq!(aes128_ecb_decode(&real_enc, key).unwrap(), plaintext);
-    }
-
-    #[test]
-    fn test_aes_padding() {
-        let plaintext = [
-            0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
             0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee
         ];
         let key = [
             0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
             0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f
         ];
-        let enc = aes128_ecb_encode_pad(&plaintext, key);
-        assert_eq!(aes128_ecb_decode_pad(&enc, key).unwrap(), plaintext);
+        let enc = ecb_encrypt(AES128, &plaintext, &key);
+        assert_eq!(ecb_decrypt(AES128, &enc, &key).unwrap(), plaintext);
 
         let plaintext = [
             0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
@@ -473,8 +341,8 @@ mod tests {
             0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
             0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f
         ];
-        let enc = aes128_ecb_encode_pad(&plaintext, key);
-        assert_eq!(aes128_ecb_decode_pad(&enc, key).unwrap(), plaintext);
+        let enc = ecb_encrypt(AES128, &plaintext, &key);
+        assert_eq!(ecb_decrypt(AES128, &enc, &key).unwrap(), plaintext);
     }
 
     #[test]

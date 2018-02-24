@@ -1,4 +1,4 @@
-use aes::*;
+use blockmode::*;
 use rand;
 use rand::distributions::{IndependentSample, Range};
 use std::collections::HashSet;
@@ -49,9 +49,9 @@ pub fn random_encrypt(plaintext: &[u8]) -> (Vec<u8>, Mode) {
     let padded = random_pad(plaintext);
     let iv: [u8; 16] = rand::random();
     if rand::random() {
-        (aes128_ecb_encode_pad(&padded, random_key),     Mode::ECB)
+        (ecb_encrypt(AES128, &padded, &random_key),      Mode::ECB)
     } else {
-        (aes128_cbc_encode_pad(&padded, random_key, iv), Mode::CBC)
+        (cbc_encrypt(AES128, &padded, &random_key, &iv), Mode::CBC)
     }
 }
 

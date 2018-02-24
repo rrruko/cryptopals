@@ -1,4 +1,5 @@
 use aes::*;
+use blockmode::*;
 use codec::*;
 
 use rand;
@@ -30,7 +31,7 @@ impl CBCServer {
             .map(|line| base64_decode(line).unwrap())
             .collect::<Vec<_>>();
         let pt = rand::thread_rng().choose(&plaintexts).unwrap();
-        aes128_cbc_encode_pad(pt, self.aes_key, self.iv)
+        cbc_encrypt(AES128, pt, &self.aes_key, &self.iv)
     }
 
     pub fn get_iv(&self) -> [u8; 16] {
@@ -40,7 +41,7 @@ impl CBCServer {
     // Consume a ciphertext, decrypt it, and return true or false depending on 
     // whether the padding is valid.
     pub fn verify_aes_128_cbc(&self, bytes: &[u8]) -> bool {
-        aes128_cbc_decode_pad(bytes, self.aes_key, self.iv).is_ok()
+        cbc_decrypt(AES128, bytes, &self.aes_key, &self.iv).is_ok()
     }
 }
 
@@ -116,6 +117,6 @@ fn _18() {
     let fuck = include_bytes!("../data/18.txt");
     let expected = include_bytes!("../data/18_result.txt");
     let dec = base64_decode(fuck).unwrap();
-    let ans = aes128_ctr(&dec, *b"YELLOW SUBMARINE", [0; 8]);
+    let ans = ctr_encrypt(AES128, &dec, *b"YELLOW SUBMARINE", [0; 8]);
     assert_eq!(ans[..], expected[..]);
 }

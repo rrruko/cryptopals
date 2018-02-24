@@ -1,4 +1,5 @@
 use aes::*;
+use blockmode::*;
 use codec::*;
 use oracle::*;
 use pkcs::*;
@@ -29,7 +30,7 @@ fn _9() {
 fn _10() {
     let file = include_bytes!("../data/10.txt");
     let dec = base64_decode_filter(file);
-    let res = aes128_cbc_decode_pad(&dec, *b"YELLOW SUBMARINE", [0; 16]).unwrap();
+    let res = cbc_decrypt(AES128, &dec, b"YELLOW SUBMARINE", &[0; 16]).unwrap();
     assert_eq!(from_utf8(&res).unwrap(), include_str!("../data/7_result.txt"));
 }
 
@@ -162,7 +163,7 @@ fn _12() {
         let mut v = Vec::new();
         v.extend_from_slice(buffer);
         v.extend_from_slice(&unknown);
-        aes128_ecb_encode_pad(&v, key)
+        ecb_encrypt(AES128, &v, &key)
     });
     let block_size = ecb_block_size(ora);
 
@@ -214,7 +215,7 @@ fn url_encode(obj: KVVec) -> Vec<u8> {
 fn mk_encrypted_url_profile(email: &[u8], key: [u8; 16]) -> Vec<u8> {
     let obj = mk_profile(email);
     let url = url_encode(obj);
-    aes128_ecb_encode_pad(&url, key)
+    ecb_encrypt(AES128, &url, &key)
 }
 
 fn pretty_ct(ciphertext: &[u8]) {
@@ -271,7 +272,7 @@ fn _13() {
 
     pretty_ct(&to);
 
-    let dec = aes128_ecb_decode_pad(&to, key).unwrap();
+    let dec = ecb_decrypt(AES128, &to, &key).unwrap();
     println!("{}", from_utf8(&dec).unwrap());
     match kvs(&dec) {
         Done(_, o) => println!("{:?}", o),
@@ -329,7 +330,7 @@ fn _14() {
     // encrypt the whole thing under ECB under a random key.
     // Given that the same key, prefix, and message are used each time,
     // we can decrypt the message.
-    let key = rand::random();
+    let key: [u8; 16] = rand::random();
     let prefix_length: u8 = rand::random();
     let mut prefix = Vec::new();
     for _ in 0..prefix_length {
@@ -342,7 +343,7 @@ fn _14() {
         v.extend_from_slice(&prefix);
         v.extend_from_slice(bytes);
         v.extend_from_slice(&unknown);
-        aes128_ecb_encode_pad(&v, key)
+        ecb_encrypt(AES128, &v, &key)
     });
 
     // Let's figure out how long the prefix is.
@@ -408,8 +409,8 @@ decrypted:
     of%20bacon______
 */
 fn _16() {
-    let key = rand::random();
-    let iv = rand::random();
+    let key: [u8; 16] = rand::random();
+    let iv: [u8; 16] = rand::random();
     let oracle = |bytes: &[u8]| {
         let mut v = Vec::new();
         v.extend_from_slice(b"comment1=cooking");
@@ -418,11 +419,11 @@ fn _16() {
         v.extend_from_slice(b";comment2=%20lik");
         v.extend_from_slice(b"e%20a%20pound%20");
         v.extend_from_slice(b"of%20bacon");
-        aes128_cbc_encode_pad(&v, key, iv)
+        cbc_encrypt(AES128, &v, &key, &iv)
     };
 
     let authenticate = |ciphertext: &[u8]| {
-        let res = aes128_cbc_decode_pad(ciphertext, key, iv).unwrap();
+        let res = cbc_decrypt(AES128, ciphertext, &key, &iv).unwrap();
         let needle = b";admin=true;";
         res.windows(needle.len()).position(|window| window == needle)
     };

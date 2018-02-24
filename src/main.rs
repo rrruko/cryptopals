@@ -10,6 +10,7 @@ extern crate nom;
 extern crate rand;
 
 mod aes;
+mod blockmode;
 mod codec;
 mod oracle;
 mod pkcs;
