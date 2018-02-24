@@ -13,11 +13,17 @@ pub const AES128: &AES = &AES { block_size: 16 };
 
 impl BlockCipher for AES {
    fn encrypt(&self, chunk: &[u8], key: &[u8]) -> Vec<u8> {
+        if self.block_size != 128 {
+            unimplemented!()
+        }
         let mut k = vec![0; self.block_size];
         k.copy_from_slice(key);
         from_matrix(aes128_chunk(to_matrix(chunk), &k))
     }
    fn decrypt(&self, chunk: &[u8], key: &[u8]) -> Vec<u8> {
+        if self.block_size != 128 {
+            unimplemented!()
+        }
         let mut k = vec![0; self.block_size];
         k.copy_from_slice(key);
         from_matrix(aes128_decode_chunk(to_matrix(chunk), &k))
