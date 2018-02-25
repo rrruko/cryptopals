@@ -1,6 +1,7 @@
 use aes::*;
 use blockmode::*;
 use codec::*;
+use xor::*;
 
 use rand;
 use rand::Rng;
@@ -10,6 +11,7 @@ pub fn set_3() {
     println!("Set 3");
     _17();
     _18();
+    _19();
 }
 
 struct CBCServer {
@@ -119,4 +121,32 @@ fn _18() {
     let dec = base64_decode(fuck).unwrap();
     let ans = ctr_encrypt(AES128, &dec, *b"YELLOW SUBMARINE", [0; 8]);
     assert_eq!(ans[..], expected[..]);
+}
+
+fn _19() {
+    let key: [u8; 16] = rand::random();
+    let plaintexts = include_bytes!("../data/19.txt")
+        .split(|byte| byte == &b'\n')
+        .map(|line| base64_decode(line).unwrap());
+    let ciphertexts = plaintexts
+        .map(|pt| ctr_encrypt(AES128, &pt, key, [0; 8]))
+        .collect::<Vec<Vec<_>>>();
+
+    let mut columns = Vec::new();
+    for i in 0.. {
+        columns.push(Vec::new());
+        for ciphertext in &ciphertexts {
+            if i < ciphertext.len() {
+                columns[i].push(ciphertext[i]);
+            }
+        }
+        if columns[i].len() == 0 {
+            break;
+        }
+        let dec = decrypt_single_byte_xor(&columns[i]);
+        println!("{:?}", dec);
+    }
+    for column in columns {
+        println!("{:?}", column);
+    }
 }

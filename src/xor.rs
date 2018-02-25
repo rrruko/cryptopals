@@ -21,7 +21,7 @@ pub fn repeating_xor(bytes: &[u8], key: &[u8]) -> Vec<u8> {
 
 pub fn decrypt_single_byte_xor(bytes: &[u8]) -> (Vec<u8>, u8) {
     let mut best_score = (0, f32::INFINITY);
-    for key in 1..127 {
+    for key in 0..=255 {
         let ch = vec![key; bytes.len()];
         let x = fixed_xor(bytes, &ch).expect("ack");
         let s = score(&x);
