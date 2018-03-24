@@ -25,21 +25,21 @@ impl MersenneTwister {
         let lower_mask = 0x7fffffff;
         let upper_mask = 0x80000000;
 
-        for i in 0..226 {
+        for i in 0..=226 {
             let temp = (state[i] & upper_mask) | (state[i + 1] & lower_mask);
             state[i] =
                 (temp >> 1) ^
                 (if temp % 2 == 0 { 0 } else { 0x9908b0df }) ^
                 state[i + 397];
         }
-        for i in 227..622 {
+        for i in 227..=622 {
             let temp = (state[i] & upper_mask) | (state[i + 1] & lower_mask);
             state[i] =
                 (temp >> 1) ^
                 (if temp % 2 == 0 { 0 } else { 0x9908b0df }) ^
                 state[i - 227];
         }
-        let temp = (state[623] & upper_mask) | (state[0  ] & lower_mask);
+        let temp = (state[623] & upper_mask) | (state[0] & lower_mask);
         state[623] =
             (temp >> 1) ^
             (if temp % 2 == 0 { 0 } else { 0x9908b0df }) ^
