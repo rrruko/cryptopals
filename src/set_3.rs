@@ -1,17 +1,22 @@
 use aes::*;
 use blockmode::*;
 use codec::*;
+use mt::*;
 use xor::*;
 
 use rand;
 use rand::Rng;
 use std::str::from_utf8;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::thread::sleep;
 
 pub fn set_3() {
     println!("Set 3");
     _17();
     _18();
     _19();
+    _21();
+    _22();
 }
 
 struct CBCServer {
@@ -21,7 +26,7 @@ struct CBCServer {
 
 impl CBCServer {
     pub fn new() -> Self {
-        CBCServer { 
+        CBCServer {
             aes_key: rand::random(),
             iv:      rand::random()
         }
@@ -40,7 +45,7 @@ impl CBCServer {
         self.iv
     }
 
-    // Consume a ciphertext, decrypt it, and return true or false depending on 
+    // Consume a ciphertext, decrypt it, and return true or false depending on
     // whether the padding is valid.
     pub fn verify_aes_128_cbc(&self, bytes: &[u8]) -> bool {
         cbc_decrypt(AES128, bytes, &self.aes_key, &self.iv).is_ok()
@@ -148,5 +153,54 @@ fn _19() {
     }
     for column in columns {
         println!("{:?}", column);
+    }
+}
+
+fn _21() {
+    let mut mt = MersenneTwister::new(0);
+    for j in 0..1000 {
+        print!("{:010} ", mt.next());
+        if j % 8 == 7 {
+            println!();
+        }
+    }
+}
+
+fn crack_seed(first_output: u32, start: u32, finish: u32) -> Option<u32> {
+    for i in start..=finish {
+        let mut mt = MersenneTwister::new(i);
+        let first = mt.next();
+        if first == first_output {
+            return Some(i)
+        }
+    }
+    return None
+}
+
+fn get_unix_time() -> u32 {
+    SystemTime::now().duration_since(UNIX_EPOCH)
+        .expect("Time went backwards").as_secs() as u32
+}
+
+fn wait_a_sec() {
+    let sample = rand::seq::sample_iter(&mut rand::thread_rng(), 40..1000, 1)
+        .unwrap()[0];
+    sleep(Duration::from_secs(sample));
+}
+
+fn _22() {
+    let mut rng = rand::thread_rng();
+    let start = get_unix_time();
+    wait_a_sec();
+    let since_the_epoch = get_unix_time();
+    let mut mt = MersenneTwister::new(since_the_epoch);
+    wait_a_sec();
+    let output = mt.next();
+    let finish = get_unix_time();
+    let the_seed = crack_seed(output, start, finish);
+
+    match the_seed {
+        Some(seed) => assert_eq!(seed, since_the_epoch),
+        None       => unreachable!()
     }
 }
