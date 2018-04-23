@@ -55,6 +55,32 @@ impl MersenneTwister {
         temp
     }
 
+    fn undo_right_18(t: u32) -> u32 {
+        let mut t = t;
+        t ^= (t & 0b11111111111111111100000000000000) >> 18;
+        t ^= (t & 0b00000000000000000011111111111111) >> 18;
+        t
+    }
+
+    fn undo_right_11(t: u32) -> u32 {
+        let mut t = t;
+        t ^= (t & 0b11111111111000000000000000000000) >> 11;
+        t ^= (t & 0b00000000000111111111110000000000) >> 11;
+        t ^= (t & 0b00000000000000000000001111111111) >> 11;
+        t
+    }
+
+    /*
+    pub fn untemper(n: u32) -> u32 {
+        let mut n = n;
+        n = undo_right_18(n);
+        n = undo_left_15(n);
+        n = undo_left_7(n);
+        n = undo_right_11(n);
+        n
+    }
+    */
+
     pub fn next(&mut self) -> u32 {
         if self.pointer >= self.state.len() {
             self.step();

@@ -204,3 +204,13 @@ fn _22() {
         None       => unreachable!()
     }
 }
+
+fn _23() {
+    let time = get_unix_time();
+    let mut mt = MersenneTwister::new(time);
+    let mut outputs = [0; 624];
+    for o in outputs {
+        let random = mt.next();
+        o = MersenneTwister::untemper(random);
+    }
+}
